@@ -72,3 +72,44 @@ func NewGame() *GameState {
 		Showdown:     false,
 	}
 }
+
+
+type Player struct {
+	Name   string
+	Hand   Hand
+	Sanity int
+}
+
+
+
+func NewGameState() *GameState {
+	return &GameState{
+		Player:   Player{Name: "You", Sanity: 100},
+		Opponent: Player{Name: "Opponent", Sanity: 100},
+		Pot:      0,
+		Turn:     "player",
+	}
+}
+
+func (g *GameState) PlaceBet(amount int) bool {
+	if g.Turn != "player" || g.Player.Sanity < amount {
+		return false
+	}
+	g.Player.Sanity -= amount
+	g.Pot += amount
+	g.Turn = "opponent"
+	return true
+}
+
+func (g *GameState) OpponentRespond() string {
+	// Basic AI response
+	bet := 10
+	if g.Opponent.Sanity < bet {
+		return "Opponent folds"
+	}
+	g.Opponent.Sanity -= bet
+	g.Pot += bet
+	g.Turn = "showdown"
+	return "Opponent calls"
+}
+

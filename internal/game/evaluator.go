@@ -17,6 +17,7 @@ const (
 	FullHouse
 	FourOfAKind
 	StraightFlush
+	RoyalFlush
 )
 
 type RankedHand struct {
