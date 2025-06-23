@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"sort"
 )
 
@@ -134,22 +135,52 @@ func numPairs(counts map[int]int) int {
 	return n
 }
 
+
 func CompareHands(player, opponent Hand) string {
 	r1 := RankHand(player)
 	r2 := RankHand(opponent)
 
-	if r1.Rank > r2.Rank {
-		return "Player wins!"
-	} else if r2.Rank > r1.Rank {
-		return "Lucky Pete wins!"
+	if r1.Rank.String() > r2.Rank.String() {
+		return fmt.Sprintf("Player wins with a %v beating a %v!", r1.Rank.String(), r2.Rank.String())
+	} else if r2.Rank.String() > r1.Rank.String() {
+		return fmt.Sprintf("Opponent wins with a %v beating a %v!", r2.Rank.String(), r1.Rank.String())
 	} else {
 		for i := range r1.Values {
 			if r1.Values[i] > r2.Values[i] {
-				return "Player wins!"
+				return fmt.Sprintf("Player wins with a %v beating a %v!", r1.Rank.String(), r2.Rank.String())
 			} else if r2.Values[i] > r1.Values[i] {
-				return "Lucky Pete wins!"
+				return fmt.Sprintf("Opponent wins with a %v beating a %v!", r2.Rank.String(), r1.Rank.String())
 			}
 		}
-		return "It's a tie!"
+		return fmt.Sprintf("It's a tie — both with %s!", r1.Rank)
+	}
+}
+
+
+
+func (hr HandRank) String() string {
+	switch hr {
+	case HighCard:
+		return "High Card"
+	case OnePair:
+		return "One Pair"
+	case TwoPair:
+		return "Two Pair"
+	case ThreeOfAKind:
+		return "Three of a Kind"
+	case Straight:
+		return "Straight"
+	case Flush:
+		return "Flush"
+	case FullHouse:
+		return "Full House"
+	case FourOfAKind:
+		return "Four of a Kind"
+	case StraightFlush:
+		return "Straight Flush"
+	case RoyalFlush:
+		return "Royal Flush"
+	default:
+		return "Unknown Hand"
 	}
 }
