@@ -1,0 +1,24 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Card Shoggoths</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <audio src="audio/creepy-loop.mp3" autoplay loop></audio>
+    <h1>Card Shoggoths</h1>
+    <div id="game">
+        <div id="player-hand" class="hand"></div>
+        <div class="controls">
+            <button onclick="deal()">Deal</button>
+            <button onclick="submitDiscard()">Discard</button>
+            <button onclick="showdown()">Showdown</button>
+        </div>
+        <div id="opponent-hand" class="hand"></div>
+    </div>
+    <div id="result"></div>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+
+@keyframes static-flicker {
+    0%, 100% { opacity: 1; transform: translate(0, 0); }
+    10% { opacity: 0.95; transform: translate(-1px, 1px); }
+    20% { opacity: 0.9; transform: translate(1px, -2px); }
+    30% { opacity: 1; transform: translate(0px, 1px); }
+    40% { opacity: 0.92; transform: translate(-2px, 0); }
+    50% { opacity: 1; transform: translate(2px, 1px); }
+    60% { opacity: 0.97; transform: translate(1px, -1px); }
+    70% { opacity: 0.93; transform: translate(0, 2px); }
+    80% { opacity: 1; transform: translate(-1px, 0); }
+    90% { opacity: 0.96; transform: translate(2px, -1px); }
+}
+
+@font-face {
+    font-family: "Creepster";
+    src: url("https://fonts.googleapis.com/css2?family=Creepster&display=swap");
+}
+
+body {
+    background-color: #0a0a0a;
+    color: #39ff14;
+    font-family: "Creepster", cursive;
+    text-align: center;
+    padding: 1em;
+    animation: static-flicker 2s infinite;
+    background-image: radial-gradient(#222 1px, transparent 1px);
+    background-size: 5px 5px;
+}
+
+h1 {
+    font-size: 3em;
+    text-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14;
+    margin-bottom: 0.5em;
+}
+
+.hand {
+    display: flex;
+    justify-content: center;
+    margin: 1em;
+}
+
+.card {
+    width: 100px;
+    margin: 0 5px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
+    transition: transform 0.2s, filter 0.2s;
+}
+
+.card:hover {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+}
+
+.card.discard {
+    border-color: red;
+    filter: grayscale(100%) brightness(0.6);
+}
+
+.controls {
+    margin: 1em;
+}
+
+button {
+    background: #111;
+    color: #39ff14;
+    border: 1px solid #39ff14;
+    padding: 0.5em 1em;
+    margin: 0 0.5em;
+    cursor: pointer;
+    text-shadow: 0 0 5px #39ff14;
+    box-shadow: 0 0 10px #39ff14 inset;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+#result {
+    margin-top: 1em;
+    font-size: 1.5em;
+    text-shadow: 0 0 8px #39ff14;
+}
