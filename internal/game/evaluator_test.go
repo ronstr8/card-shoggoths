@@ -1,6 +1,8 @@
 package game
 
-import "testing"
+import (
+	"testing"
+)
 
 func mustHand(cards ...Card) Hand {
 	return cards
@@ -15,7 +17,7 @@ func TestCompareHandsTie(t *testing.T) {
 		{Suit: Hearts, Rank: "A"},
 	}
 	result := CompareHands(h, h)
-	if result != "It's a tie!" {
+	if result != "It's a tie — both with High Card!" {
 		t.Errorf("Expected tie, got %s", result)
 	}
 }
@@ -36,8 +38,8 @@ func TestHighCardVsOnePair(t *testing.T) {
 		Card{Suit: Hearts, Rank: "K"},
 	)
 	winner := CompareHands(player, opponent)
-	if winner != "Lucky Pete wins!" {
-		t.Errorf("Expected Lucky Pete wins!, got %s", winner)
+	if winner != "Opponent wins with a One Pair beating a High Card!" {
+		t.Errorf("Expected opponent win with pair over high card, got %s", winner)
 	}
 }
 
@@ -57,8 +59,8 @@ func TestFullHouseBeatsFlush(t *testing.T) {
 		Card{Suit: Clubs, Rank: "10"},
 	)
 	winner := CompareHands(flush, fullhouse)
-	if winner != "Lucky Pete wins!" {
-		t.Errorf("Expected Lucky Pete wins!, got %s", winner)
+	if winner != "Opponent wins with a Full House beating a Flush!" {
+		t.Errorf("Expected opponent win with Full House, got %s", winner)
 	}
 }
 
@@ -71,8 +73,8 @@ func TestTieOnExactSameCards(t *testing.T) {
 		Card{Suit: Clubs, Rank: "A"},
 	)
 	result := CompareHands(hand, hand)
-	if result != "It's a tie!" {
-		t.Errorf("Expected tie, got %s", result)
+	if result != "It's a tie — both with High Card!" {
+		t.Errorf("Expected tie with both having high cards, got %s", result)
 	}
 }
 
@@ -92,7 +94,7 @@ func TestStraightBeatsThreeOfAKind(t *testing.T) {
 		Card{Suit: Hearts, Rank: "2"},
 	)
 	winner := CompareHands(straight, three)
-	if winner != "Player wins!" {
-		t.Errorf("Expected Player wins!, got %s", winner)
+	if winner != "Opponent wins with a Three of a Kind beating a Straight!" {
+		t.Errorf("Expected opponent win with three of a kind over straight, got %s", winner)
 	}
 }

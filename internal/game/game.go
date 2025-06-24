@@ -28,12 +28,18 @@ type Deck []Card
 type Hand []Card
 
 type GameState struct {
-	Deck         Deck `json:"-"`
-	PlayerHand   Hand `json:"player_hand"`
-	OpponentHand Hand `json:"opponent_hand"`
-	Discarded    bool `json:"discarded"`
-	Showdown     bool `json:"showdown"`
+    Deck          Deck
+    PlayerHand    Hand
+    OpponentHand  Hand
+    Discarded     bool
+    Showdown      bool
+
+    PlayerSanity   int
+    OpponentSanity int
+    Pot            int
+    Turn           string // or maybe an enum like "player" / "opponent"
 }
+
 
 func NewDeck() Deck {
 	var d Deck
@@ -80,22 +86,11 @@ type Player struct {
 	Sanity int
 }
 
-
-
-func NewGameState() *GameState {
-	return &GameState{
-		Player:   Player{Name: "You", Sanity: 100},
-		Opponent: Player{Name: "Opponent", Sanity: 100},
-		Pot:      0,
-		Turn:     "player",
-	}
-}
-
 func (g *GameState) PlaceBet(amount int) bool {
-	if g.Turn != "player" || g.Player.Sanity < amount {
+	if g.Turn != "player" || g.PlayerSanity < amount {
 		return false
 	}
-	g.Player.Sanity -= amount
+	g.PlayerSanity -= amount
 	g.Pot += amount
 	g.Turn = "opponent"
 	return true
@@ -104,10 +99,10 @@ func (g *GameState) PlaceBet(amount int) bool {
 func (g *GameState) OpponentRespond() string {
 	// Basic AI response
 	bet := 10
-	if g.Opponent.Sanity < bet {
+	if g.OpponentSanity < bet {
 		return "Opponent folds"
 	}
-	g.Opponent.Sanity -= bet
+	g.OpponentSanity -= bet
 	g.Pot += bet
 	g.Turn = "showdown"
 	return "Opponent calls"

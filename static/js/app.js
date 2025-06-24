@@ -30,7 +30,8 @@ function toggleDiscard(idx, img) {
 }
 
 function deal() {
-    fetch('/api/deal').then(res => res.json()).then(data => {
+    console.log("Calling API:", fetch('/api/deal'));
+fetch('/api/deal').then(res => res.json()).then(data => {
         playerHand = data.player_hand;
         opponentHand = data.opponent_hand;
         discardIndices = [];
@@ -41,7 +42,11 @@ function deal() {
 }
 
 function submitDiscard() {
-    fetch('/api/discard', {
+    console.log("Calling API:", fetch('/api/discard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indices: discardIndices }));
+fetch('/api/discard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ indices: discardIndices })
@@ -54,7 +59,8 @@ function submitDiscard() {
 }
 
 function showdown() {
-    fetch('/api/showdown').then(res => res.json()).then(data => {
+    console.log("Calling API:", fetch('/api/showdown'));
+fetch('/api/showdown').then(res => res.json()).then(data => {
         renderHand('opponent-hand', data.state.opponent_hand, true);
         document.getElementById('result').textContent = data.result;
     });
