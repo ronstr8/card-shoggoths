@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"card-shoggoths/internal/game"
+
+	"github.com/google/uuid"
 )
 
 // Session-based state tracking
@@ -74,6 +76,7 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 }
 
 func getSessionID(w http.ResponseWriter, r *http.Request) string {
+    log.Println("Attempting to retrieve session cookie")
 	cookie, err := r.Cookie("sid")
 	if err == nil {
 		return cookie.Value
@@ -85,4 +88,37 @@ func getSessionID(w http.ResponseWriter, r *http.Request) string {
 		Path:  "/",
 	})
 	return id
+}
+
+func createNewSession(w http.ResponseWriter, r *http.Request) *game.GameState {
+    sessionID := uuid.NewString()
+    gs := game.NewGame()
+    mu.Lock()
+    sessions[sessionID] = gs
+    mu.Unlock()
+
+    cookie := &http.Cookie{
+        Name:  "session_id",
+        Value: sessionID,
+        Path:  "/",
+    }
+    http.SetCookie(w, cookie)
+    log.Printf("New session created with ID: %s", sessionID)
+    return gs
+}
+
+
+
+func ClearSessionHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		http.Error(w, "No session cookie found", http.StatusBadRequest)
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	delete(sessions, cookie.Value)
+	log.Printf("Cleared session for ID: %s", cookie.Value)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Session cleared"))
 }

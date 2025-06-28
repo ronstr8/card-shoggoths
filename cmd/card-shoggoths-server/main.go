@@ -17,6 +17,7 @@ func main() {
 	log.Println("Registering handler /api/showdown")
 	http.HandleFunc("/api/showdown", server.ShowdownHandler)
 
+	http.HandleFunc("/debug/clear-session", server.ClearSessionHandler)
 	log.Println("Serving on :8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
