@@ -1,35 +1,78 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Shoggoths</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<audio id="ambient" autoplay loop>
-  <source src="/audio/creepy-loop.mp3" type="audio/mpeg">
-  Your browser does not support the audio element.
-</audio>
-    <audio src="/audio/creepy-loop.mp3" autoplay loop></audio>
+    <audio id="ambient" autoplay loop>
+        <source src="/audio/creepy-loop.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+    
     <h1>Card Shoggoths</h1>
-    <div id="game">
-        <div id="player-hand" class="hand"></div>
-        <div class="controls">
-            <button onclick="deal()">Deal</button>
-            <button onclick="submitDiscard()">Discard</button>
-            <button onclick="showdown()">Showdown</button>
+    
+    <div id="game-container">
+        <!-- Opponent Section -->
+        <div id="opponent-section" class="player-section">
+            <h2>The Ancient One</h2>
+            <div class="sanity-container">
+                <span class="sanity-emoji" id="opponent-sanity-emoji">😊</span>
+                <div class="sanity-bar-container">
+                    <div class="sanity-bar" id="opponent-sanity-bar"></div>
+                </div>
+                <span class="sanity-text" id="opponent-sanity-text">100</span>
+            </div>
+            <div id="opponent-hand" class="hand"></div>
         </div>
-        <div id="opponent-hand" class="hand"></div>
+        
+        <!-- Game Info Section -->
+        <div id="game-info">
+            <div id="pot-container">
+                <h3>Sanity Pot</h3>
+                <div id="pot-display">
+                    <span id="pot-amount">0</span> 🧠
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button id="deal-btn" onclick="deal()">Deal Cards</button>
+                
+                <div id="betting-controls">
+                    <input type="number" id="bet-amount" value="10" min="1" max="100" disabled>
+                    <button id="bet-btn" onclick="placeBet()" disabled>Bet Sanity</button>
+                </div>
+                
+                <button id="discard-btn" onclick="submitDiscard()" disabled>Discard Selected</button>
+                <button id="showdown-btn" onclick="showdown()" disabled>Reveal Hands</button>
+            </div>
+            
+            <div id="result"></div>
+        </div>
+        
+        <!-- Player Section -->
+        <div id="player-section" class="player-section">
+            <h2>You</h2>
+            <div class="sanity-container">
+                <span class="sanity-emoji" id="player-sanity-emoji">😊</span>
+                <div class="sanity-bar-container">
+                    <div class="sanity-bar" id="player-sanity-bar"></div>
+                </div>
+                <span class="sanity-text" id="player-sanity-text">100</span>
+            </div>
+            <div id="player-hand" class="hand"></div>
+        </div>
     </div>
-    <div id="result"></div>
+    
     <script src="js/app.js"></script>
-
-<script>
-window.addEventListener('click', () => {
-  const audio = document.getElementById('ambient');
-  if (audio) audio.play().catch(console.warn);
-}, { once: true });
-</script>
+    <script>
+        // Auto-play audio on first interaction
+        window.addEventListener('click', () => {
+            const audio = document.getElementById('ambient');
+            if (audio) audio.play().catch(console.warn);
+        }, { once: true });
+    </script>
 </body>
 </html>
