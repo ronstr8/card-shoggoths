@@ -7,5 +7,5 @@ Asset Credits
 -------------
 
 * https://code.google.com/archive/p/vector-playing-cards/
-* https://freesound.org/people/busiuq/sounds/544528/?
+* https://freesound.org/people/busiuq/sounds/544528/
 * https://free-game-assets.itch.io/free-chaos-monsters-3232-icon-pack
