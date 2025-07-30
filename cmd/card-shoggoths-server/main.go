@@ -1,29 +1,34 @@
 package main
 
 import (
+	"card-shoggoths/internal/server"
 	"log"
 	"net/http"
-	"card-shoggoths/internal/server"
+
+	chi "github.com/go-chi/chi/v5"
 )
 
 func main() {
+	r := chi.NewRouter()
+
 	log.Println("Registering default static file handler")
-	http.Handle("/", http.FileServer(http.Dir("./static")))
-	
+	r.Handle("/*", http.FileServer(http.Dir("./static")))
+
 	log.Println("Registering handler /api/deal")
-	http.HandleFunc("/api/deal", server.DealHandler)
-	
+	r.HandleFunc("/api/deal", server.DealHandler)
+
 	log.Println("Registering handler /api/bet")
-	http.HandleFunc("/api/bet", server.BetHandler)
-	
+	r.HandleFunc("/api/bet", server.BetHandler)
+
 	log.Println("Registering handler /api/discard")
-	http.HandleFunc("/api/discard", server.DiscardHandler)
-	
+	r.HandleFunc("/api/discard", server.DiscardHandler)
+
 	log.Println("Registering handler /api/showdown")
-	http.HandleFunc("/api/showdown", server.ShowdownHandler)
-	
-	http.HandleFunc("/debug/clear-session", server.ClearSessionHandler)
-	
+	r.HandleFunc("/api/showdown", server.ShowdownHandler)
+
+	log.Println("Registering debug handler /debug/clear-session")
+	r.HandleFunc("/debug/clear-session", server.ClearSessionHandler)
+
 	log.Println("Serving on :8080...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", r))
 }

@@ -2,7 +2,6 @@ package game
 
 import (
 	"math/rand"
-	"time"
 )
 
 type Suit string
@@ -26,17 +25,44 @@ type Card struct {
 type Deck []Card
 type Hand []Card
 
+type GamePhase int
+
+const (
+	PhaseDeal GamePhase = iota
+	PhaseBet
+	PhaseDiscard
+	PhaseShowdown
+	PhaseComplete
+)
+
+func (p GamePhase) String() string {
+	switch p {
+	case PhaseDeal:
+		return "deal"
+	case PhaseBet:
+		return "bet"
+	case PhaseDiscard:
+		return "discard"
+	case PhaseShowdown:
+		return "showdown"
+	case PhaseComplete:
+		return "complete"
+	default:
+		return "unknown"
+	}
+}
+
 type GameState struct {
-	Deck           Deck   `json:"deck"`
-	PlayerHand     Hand   `json:"player_hand"`
-	OpponentHand   Hand   `json:"opponent_hand"`
-	Discarded      bool   `json:"discarded"`
-	Showdown       bool   `json:"showdown"`
-	PlayerSanity   int    `json:"player_sanity"`
-	OpponentSanity int    `json:"opponent_sanity"`
-	Pot            int    `json:"pot"`
-	Turn           string `json:"turn"`
-	GamePhase      string `json:"game_phase"` // "deal", "bet", "discard", "showdown", "complete"
+	Deck           Deck      `json:"deck"`
+	PlayerHand     Hand      `json:"player_hand"`
+	OpponentHand   Hand      `json:"opponent_hand"`
+	Discarded      bool      `json:"discarded"`
+	Showdown       bool      `json:"showdown"`
+	PlayerSanity   int       `json:"player_sanity"`
+	OpponentSanity int       `json:"opponent_sanity"`
+	Pot            int       `json:"pot"`
+	Turn           string    `json:"turn"`
+	GamePhase      GamePhase `json:"game_phase"`
 }
 
 func NewDeck() Deck {
@@ -46,7 +72,6 @@ func NewDeck() Deck {
 			d = append(d, Card{Suit: s, Rank: r})
 		}
 	}
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(d), func(i, j int) { d[i], d[j] = d[j], d[i] })
 	return d
 }
@@ -74,11 +99,11 @@ func NewGame() *GameState {
 		OpponentHand:   opponent,
 		Discarded:      false,
 		Showdown:       false,
-		PlayerSanity:   100,   // Starting sanity
-		OpponentSanity: 100,   // Starting sanity
+		PlayerSanity:   100, // Starting sanity
+		OpponentSanity: 100, // Starting sanity
 		Pot:            0,
 		Turn:           "player",
-		GamePhase:      "deal",
+		GamePhase:      PhaseDeal,
 	}
 }
 
@@ -95,7 +120,7 @@ func (g *GameState) PlaceBet(amount int) bool {
 	g.PlayerSanity -= amount
 	g.Pot += amount
 	g.Turn = "opponent"
-	g.GamePhase = "bet"
+	g.GamePhase = PhaseBet
 	return true
 }
 
@@ -105,42 +130,43 @@ func (g *GameState) OpponentRespond() string {
 	if bet > g.OpponentSanity {
 		bet = g.OpponentSanity // All in
 	}
-	
+
 	if bet == 0 {
 		bet = 10 // Minimum bet
 	}
-	
+
 	if g.OpponentSanity < bet {
-		g.GamePhase = "complete"
+		g.GamePhase = PhaseComplete
 		return "Opponent folds due to insufficient sanity"
 	}
-	
+
 	g.OpponentSanity -= bet
 	g.Pot += bet
 	g.Turn = "player"
-	g.GamePhase = "discard"
+	g.GamePhase = PhaseDiscard
 	return "Opponent calls and raises"
 }
 
 func (g *GameState) CanDiscard() bool {
-	return g.GamePhase == "discard" && !g.Discarded
+	return g.GamePhase == PhaseDiscard && !g.Discarded
 }
 
 func (g *GameState) CanShowdown() bool {
-	return g.Discarded || g.GamePhase == "showdown"
+	return g.Discarded || g.GamePhase == PhaseShowdown
 }
 
 func (g *GameState) CompleteShowdown() {
 	g.Showdown = true
-	g.GamePhase = "complete"
-	
+	g.GamePhase = PhaseComplete
+
 	// Award pot to winner
 	result := CompareHandsString(g.PlayerHand, g.OpponentHand)
-	if result == "player" {
+	switch result {
+	case "player":
 		g.PlayerSanity += g.Pot
-	} else if result == "opponent" {
+	case "opponent":
 		g.OpponentSanity += g.Pot
-	} else {
+	default:
 		// Split pot on tie
 		g.PlayerSanity += g.Pot / 2
 		g.OpponentSanity += g.Pot / 2
