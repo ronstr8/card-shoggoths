@@ -24,10 +24,10 @@ const (
 
 // HandValue represents the value of a poker hand for comparison
 type HandValue struct {
-	Rank     HandRank
-	Primary  int // Primary ranking value (e.g., the rank of the pair)
-	Secondary int // Secondary ranking value (e.g., kicker)
-	Kickers  []int // Additional kickers for tie-breaking
+	Rank      HandRank
+	Primary   int   // Primary ranking value (e.g., the rank of the pair)
+	Secondary int   // Secondary ranking value (e.g., kicker)
+	Kickers   []int // Additional kickers for tie-breaking
 }
 
 // CardValue returns the numeric value of a card rank
@@ -200,44 +200,52 @@ func EvaluateHand(hand []Card) HandValue {
 	return HandValue{Rank: HighCard, Kickers: reverseSlice(values)}
 }
 
-// CompareHands compares two poker hands and returns:
-// 1 if hand1 wins, -1 if hand2 wins, 0 if tie
-func CompareHands(hand1, hand2 []Card) int {
+// ComparisonResult represents the result of a hand comparison
+type ComparisonResult int
+
+const (
+	ResultHand1Wins ComparisonResult = -1
+	ResultTie       ComparisonResult = 0
+	ResultHand2Wins ComparisonResult = 1
+)
+
+// CompareHands compares two poker hands and returns a ComparisonResult
+func CompareHands(hand1, hand2 []Card) ComparisonResult {
 	val1 := EvaluateHand(hand1)
 	val2 := EvaluateHand(hand2)
 
 	// Compare hand ranks first
 	if val1.Rank > val2.Rank {
-		return 1
+		return ResultHand1Wins
 	} else if val1.Rank < val2.Rank {
-		return -1
+		return ResultHand2Wins
 	}
 
 	// Same rank, compare primary values
 	if val1.Primary > val2.Primary {
-		return 1
+		return ResultHand1Wins
 	} else if val1.Primary < val2.Primary {
-		return -1
+		return ResultHand2Wins
 	}
 
 	// Same primary, compare secondary values
 	if val1.Secondary > val2.Secondary {
-		return 1
+		return ResultHand1Wins
 	} else if val1.Secondary < val2.Secondary {
-		return -1
+		return ResultHand2Wins
 	}
 
 	// Compare kickers
 	for i := 0; i < len(val1.Kickers) && i < len(val2.Kickers); i++ {
 		if val1.Kickers[i] > val2.Kickers[i] {
-			return 1
+			return ResultHand1Wins
 		} else if val1.Kickers[i] < val2.Kickers[i] {
-			return -1
+			return ResultHand2Wins
 		}
 	}
 
 	// If all comparisons are equal, it's a tie
-	return 0
+	return ResultTie
 }
 
 // Helper function to reverse a slice
@@ -281,21 +289,22 @@ func GetHandName(rank HandRank) string {
 // for compatibility with existing game logic
 func CompareHandsString(hand1, hand2 []Card) string {
 	result := CompareHands(hand1, hand2)
-	if result > 0 {
+	switch result {
+	case ResultHand1Wins:
 		return "player"
-	} else if result < 0 {
+	case ResultHand2Wins:
 		return "opponent"
-	} else {
+	default:
 		return "tie"
 	}
 }
 
 // HandComparisonResult holds detailed comparison information for display
 type HandComparisonResult struct {
-	Winner          string
-	PlayerHandName  string
+	Winner           string
+	PlayerHandName   string
 	OpponentHandName string
-	Message         string
+	Message          string
 }
 
 // CompareHandsForDisplay compares two poker hands and returns detailed result information
@@ -303,30 +312,31 @@ type HandComparisonResult struct {
 func CompareHandsForDisplay(playerHand, opponentHand []Card) HandComparisonResult {
 	playerValue := EvaluateHand(playerHand)
 	opponentValue := EvaluateHand(opponentHand)
-	
+
 	result := CompareHands(playerHand, opponentHand)
-	
+
 	playerHandName := GetHandName(playerValue.Rank)
 	opponentHandName := GetHandName(opponentValue.Rank)
-	
+
 	var winner string
 	var message string
-	
-	if result > 0 {
+
+	switch result {
+	case ResultHand1Wins:
 		winner = "player"
 		message = fmt.Sprintf("You win with %s! The Ancient One had %s.", playerHandName, opponentHandName)
-	} else if result < 0 {
+	case ResultHand2Wins:
 		winner = "opponent"
 		message = fmt.Sprintf("The Ancient One wins with %s! You had %s.", opponentHandName, playerHandName)
-	} else {
+	default: // ResultTie
 		winner = "tie"
 		message = fmt.Sprintf("It's a tie! Both hands have %s.", playerHandName)
 	}
-	
+
 	return HandComparisonResult{
-		Winner:          winner,
-		PlayerHandName:  playerHandName,
+		Winner:           winner,
+		PlayerHandName:   playerHandName,
 		OpponentHandName: opponentHandName,
-		Message:         message,
+		Message:          message,
 	}
 }
