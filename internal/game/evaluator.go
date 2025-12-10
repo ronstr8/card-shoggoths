@@ -33,13 +33,13 @@ type HandValue struct {
 // CardValue returns the numeric value of a card rank
 func CardValue(rank Rank) int {
 	switch string(rank) {
-	case "A":
+	case "ace", "A":
 		return 14
-	case "K":
+	case "king", "K":
 		return 13
-	case "Q":
+	case "queen", "Q":
 		return 12
-	case "J":
+	case "jack", "J":
 		return 11
 	default:
 		if val, err := strconv.Atoi(string(rank)); err == nil {

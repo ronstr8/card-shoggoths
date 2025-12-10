@@ -243,65 +243,122 @@ func (g *GameState) OpponentTurn() {
 		return
 	}
 
-	// Simple AI
-	// If check allowed, check.
-	// If bet to call, call if decent hand or bluff.
-	// Randomly raise.
+	// Use AI to decide action
+	ai := DefaultAI
+	action, amount := ai.DecideAction(g.OpponentHand, g)
 
-	callAmount := g.CurrentBet - g.OpponentBet
-
-	action := ""
-
-	if callAmount == 0 {
-		// Can check or bet
-		roll := rand.Intn(100)
-		if roll < 20 && g.OpponentSanity > 10 {
-			// Bet/Raise
-			raiseAmt := 10
-			g.OpponentSanity -= raiseAmt
-			g.Pot += raiseAmt
-			g.OpponentBet += raiseAmt
-			g.CurrentBet = g.OpponentBet
-			action = fmt.Sprintf("Opponent bets %d.", raiseAmt)
-			g.Turn = "player"
-			g.ActivePlayer = "player"
-		} else {
-			// Check
-			action = "Opponent checks."
-			// Round complete?
-			if g.ActivePlayer == "opponent" { // it was opp turn
-				// If player checked first, then round over.
-				// We need tracking of who started/acted.
-				// Simplify: If opponent checks and he acted second (or first in generic flow), pass back or end.
-				// In Heads Up: Dealer (Player) acts first Pre-Flop? Actually in Draw:
-				// Pre-draw: Player 1st.
-				// If Player Checks, Opp Checks -> Next Phase.
-				// If Player Bets, Opp Calls -> Next Phase.
-				g.NextPhase()
+	switch action {
+	case "check":
+		// Verify check is legal (no bet to call)
+		if g.CurrentBet > g.OpponentBet {
+			// Forced to call (or fold, but AI said check which implies it thinks it can?
+			// Actually DecideAction logic handles call vs check based on input.
+			// But let's be safe. If we must call but tried to check, just call.
+			toCall := g.CurrentBet - g.OpponentBet
+			if toCall > 0 {
+				// Fallback to call logic
+				if g.OpponentSanity >= toCall {
+					g.OpponentSanity -= toCall
+					g.Pot += toCall
+					g.OpponentBet += toCall
+					g.LastAction = "Opponent calls."
+					g.NextPhase()
+				} else {
+					// Fold
+					g.GamePhase = PhaseComplete
+					g.Winner = "player"
+					g.PlayerSanity += g.Pot
+					g.Pot = 0
+					g.LastAction = "Opponent folds (insufficient sanity)."
+				}
+				return
 			}
 		}
-	} else {
-		// Must call or fold (or raise)
-		if callAmount > g.OpponentSanity {
+
+		g.LastAction = "Opponent checks."
+		if g.ActivePlayer == "opponent" {
+			// If opponent acted second/last, round over
+			g.NextPhase()
+		} else {
+			// Player's turn next?
+			// "check" usually passes action.
+			// If Player Checked, Opponent Checks -> Round End.
+			// If Player Bet, Opponent Check -> Illegal, handled above.
+			// If new round (Opponent First?), Opp Check -> Player Turn.
+
+			// In this engine, who goes first?
+			// g.Turn = "player"?
+			// Let's assume generic state flip.
+			g.Turn = "player"
+			g.ActivePlayer = "player"
+		}
+
+	case "call":
+		toCall := g.CurrentBet - g.OpponentBet
+		if toCall > g.OpponentSanity {
 			// Fold
 			g.GamePhase = PhaseComplete
 			g.Winner = "player"
 			g.PlayerSanity += g.Pot
 			g.Pot = 0
-			g.LastAction = "Opponent folds. You win!"
+			g.LastAction = "Opponent folds."
+			return
+		}
+		g.OpponentSanity -= toCall
+		g.Pot += toCall
+		g.OpponentBet += toCall
+		g.LastAction = "Opponent calls."
+		g.NextPhase()
+
+	case "bet", "raise":
+		// Raise amount
+		// amount returned by AI is 'raise by'
+		totalCost := (g.CurrentBet - g.OpponentBet) + amount
+
+		if g.OpponentSanity < totalCost {
+			// Just call/check if can't afford raise
+			// Or all-in? Let's just call/check for simplicity to avoid side-pot logic
+			toCall := g.CurrentBet - g.OpponentBet
+			if toCall > 0 && g.OpponentSanity >= toCall {
+				g.OpponentSanity -= toCall
+				g.Pot += toCall
+				g.OpponentBet += toCall
+				g.LastAction = "Opponent calls."
+				g.NextPhase()
+			} else if toCall == 0 {
+				g.LastAction = "Opponent checks."
+				g.Turn = "player"
+				g.ActivePlayer = "player"
+			} else {
+				// Fold
+				g.GamePhase = PhaseComplete
+				g.Winner = "player"
+				g.PlayerSanity += g.Pot
+				g.Pot = 0
+				g.LastAction = "Opponent folds."
+			}
 			return
 		}
 
-		// Call
-		g.OpponentSanity -= callAmount
-		g.Pot += callAmount
-		g.OpponentBet += callAmount
-		action = "Opponent calls."
-		g.NextPhase()
-	}
+		g.OpponentSanity -= totalCost
+		g.Pot += totalCost
+		g.OpponentBet += totalCost
+		g.CurrentBet = g.OpponentBet
 
-	if g.GamePhase != PhaseComplete {
-		g.LastAction = action
+		if action == "bet" {
+			g.LastAction = fmt.Sprintf("Opponent bets %d.", amount)
+		} else {
+			g.LastAction = fmt.Sprintf("Opponent raises by %d.", amount)
+		}
+		g.Turn = "player"
+		g.ActivePlayer = "player"
+
+	case "fold":
+		g.GamePhase = PhaseComplete
+		g.Winner = "player"
+		g.PlayerSanity += g.Pot
+		g.Pot = 0
+		g.LastAction = "Opponent folds. You win!"
 	}
 }
 
@@ -340,14 +397,10 @@ func (g *GameState) PerformDiscard(indices []int) {
 	// Player discards
 	ReplaceCards(&g.Deck, &g.PlayerHand, indices)
 
-	// Opponent discards (simple AI: discard non-paired low cards)
-	// TODO: Better AI for discard
-	// For now, discard random 0-2 cards
-	discardCount := rand.Intn(3)
-	var oppIndices []int
-	for i := 0; i < discardCount; i++ {
-		oppIndices = append(oppIndices, i) // simple discard first few
-	}
+	// Opponent discards using AI
+	ai := DefaultAI
+	oppIndices := ai.ChooseDiscard(g.OpponentHand)
+
 	ReplaceCards(&g.Deck, &g.OpponentHand, oppIndices)
 
 	g.Discarded = true // Mark as done
