@@ -324,10 +324,30 @@ func CompareHandsForDisplay(playerHand, opponentHand []Card) HandComparisonResul
 	switch result {
 	case ResultHand1Wins:
 		winner = "player"
-		message = fmt.Sprintf("You win with %s! The Ancient One had %s.", playerHandName, opponentHandName)
+		if playerValue.Rank == opponentValue.Rank {
+			if playerValue.Rank == OnePair {
+				message = fmt.Sprintf("You win with %s! The Ancient One had a lesser pair.", playerHandName)
+			} else if playerValue.Rank == TwoPair {
+				message = fmt.Sprintf("You win with %s! The Ancient One had a lesser two pair.", playerHandName)
+			} else {
+				message = fmt.Sprintf("You win with %s! The Ancient One had %s.", playerHandName, opponentHandName)
+			}
+		} else {
+			message = fmt.Sprintf("You win with %s! The Ancient One had %s.", playerHandName, opponentHandName)
+		}
 	case ResultHand2Wins:
 		winner = "opponent"
-		message = fmt.Sprintf("The Ancient One wins with %s! You had %s.", opponentHandName, playerHandName)
+		if playerValue.Rank == opponentValue.Rank {
+			if playerValue.Rank == OnePair {
+				message = fmt.Sprintf("The Ancient One wins with %s! You had a lesser pair.", opponentHandName)
+			} else if playerValue.Rank == TwoPair {
+				message = fmt.Sprintf("The Ancient One wins with %s! You had a lesser two pair.", opponentHandName)
+			} else {
+				message = fmt.Sprintf("The Ancient One wins with %s! You had %s.", opponentHandName, playerHandName)
+			}
+		} else {
+			message = fmt.Sprintf("The Ancient One wins with %s! You had %s.", opponentHandName, playerHandName)
+		}
 	default: // ResultTie
 		winner = "tie"
 		message = fmt.Sprintf("It's a tie! Both hands have %s.", playerHandName)

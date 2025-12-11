@@ -163,9 +163,9 @@ func ShowdownHandler(w http.ResponseWriter, r *http.Request) {
 	saveGame(sid, g)
 
 	// Frontend expects { result: ..., state: ... }
-	player := g.Players[0]
-	opponent := g.Players[1]
-	result := game.CompareHandsForDisplay(player.Hand, opponent.Hand)
+	playerHand := g.RoundStates[0].Hand
+	opponentHand := g.RoundStates[1].Hand
+	result := game.CompareHandsForDisplay(playerHand, opponentHand)
 
 	writeJSON(w, map[string]interface{}{
 		"result": result,
@@ -177,6 +177,24 @@ func ClearSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// Not easily supported with SQLite without ID.
 	// For now just ignore or implement delete if strictly needed.
 	w.WriteHeader(http.StatusOK)
+}
+
+func RebuyHandler(w http.ResponseWriter, r *http.Request) {
+	g, sid := getGame(w, r)
+	if g == nil {
+		// No game exists, create one
+		g = game.NewGame()
+		g.ID = sid
+		g.CollectAnte(10) // Auto-start
+	} else {
+		// Reset logic: New Game completely
+		newGame := game.NewGame()
+		newGame.ID = sid
+		g = newGame
+		g.CollectAnte(10)
+	}
+	saveGame(sid, g)
+	writeJSON(w, g)
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

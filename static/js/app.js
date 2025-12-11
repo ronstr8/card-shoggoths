@@ -71,8 +71,14 @@ function renderHand(containerId, hand, faceUp) {
         img.className = 'card';
         img.alt = faceUp ? `${rank} of ${suit}` : 'Card back';
 
-        if (faceUp && containerId === 'player-hand' && gameState && gameState.game_phase === 'discard') {
+        // Always bind click for player hand, let handler decide
+        if (faceUp && containerId === 'player-hand') {
             img.onclick = () => toggleDiscard(idx, img);
+        }
+
+        // Restore visual state if re-rendered
+        if (containerId === 'player-hand' && discardIndices.includes(idx)) {
+            img.classList.add('discard');
         }
 
         container.appendChild(img);
@@ -80,6 +86,8 @@ function renderHand(containerId, hand, faceUp) {
 }
 
 function toggleDiscard(idx, img) {
+    if (!gameState || gameState.game_phase !== 'discard') return;
+
     const i = discardIndices.indexOf(idx);
     if (i >= 0) {
         discardIndices.splice(i, 1);
@@ -89,6 +97,16 @@ function toggleDiscard(idx, img) {
         discardIndices.push(idx);
         img.classList.add('discard');
     }
+}
+
+// Helper to get player state which is now split
+function getPlayerIdentity(idx) {
+    if (!gameState || !gameState.players) return null;
+    return gameState.players[idx];
+}
+function getPlayerRoundState(idx) {
+    if (!gameState || !gameState.round_states) return null;
+    return gameState.round_states[idx];
 }
 
 function updateButtons() {
@@ -104,23 +122,6 @@ function updateButtons() {
         return;
     }
 
-    // Auto-fill bet defaults
-    if (gameState.game_phase === 'PreDrawBetting' || gameState.game_phase === 'PostDrawBetting') { // Values from GamePhase enum string?
-        // Wait, JSON usually serializes int enum as number unless Matcher/Stringer used?
-        // GamePhase is int in Go. `json:"game_phase"`
-        // I need to check how it serializes. 
-        // If I didn't add MarshalJSON, it's an int.
-        // Let's assume it is 1, 2, 3... or add string logic.
-        // Actually, previous app.js generic strings "bet", "discard".
-        // My Go `GamePhase` is a custom type.
-        // Let's assume I need to handle integers or check `game.go`.
-        // Constants: PhaseAnte=0, PreDrawBetting=1, Discard=2, PostDrawBetting=3, Showdown=4, Complete=5.
-
-        // Actually, just relying on Phase map is safer or standardizing.
-        // Let's check `game_phase` values in JS console later or assume ints for now.
-        // Standard: 1=Betting1, 2=Discard, 3=Betting2
-    }
-
     // React to phase names from Go (MarshalText returns strings: "ante", "bet_pre", "discard", "bet_post", "showdown", "complete")
     const phase = gameState.game_phase;
 
@@ -128,17 +129,23 @@ function updateButtons() {
     const isDiscard = (phase === "discard");
     const isComplete = (phase === "complete" || phase === "end" || phase === "ante" || phase === "deal");
 
+    const playerState = getPlayerRoundState(0);
+
     if (dealBtn) dealBtn.disabled = !isComplete && phase !== "ante" && phase !== "deal";
     if (betBtn) betBtn.disabled = !isBetting;
     if (foldBtn) foldBtn.disabled = (!isBetting && !isDiscard);
-    if (discardBtn) discardBtn.disabled = !isDiscard || (gameState.players[0].discarded);
+    if (discardBtn) discardBtn.disabled = !isDiscard || (playerState && playerState.discarded);
     if (showdownBtn) showdownBtn.disabled = !(phase === "showdown");
 
     // Input Handling
-    if (isBetting) {
+    if (isBetting && playerState) {
         betInput.disabled = false;
-        const player = gameState.players[0];
-        const toCall = gameState.current_bet - player.bet;
+        const player = getPlayerIdentity(0);
+        const toCall = gameState.current_bet - playerState.bet;
+
+        // Set min/max constraints
+        betInput.min = toCall > 0 ? toCall : 0;
+        betInput.max = player ? player.sanity : 100;
 
         // Update button text? "Bet" / "Call" / "Check"
         if (toCall === 0) {
@@ -151,6 +158,8 @@ function updateButtons() {
         }
     } else {
         betInput.disabled = true;
+        betInput.min = 0;
+        betInput.max = 100;
         betBtn.textContent = "Bet";
     }
 }
@@ -163,8 +172,8 @@ async function deal() {
         // Reset local state
         discardIndices = [];
 
-        renderHand('player-hand', gameState.players[0].hand, true);
-        renderHand('opponent-hand', gameState.players[1].hand, false); // Hidden
+        renderHand('player-hand', getPlayerRoundState(0).hand, true);
+        renderHand('opponent-hand', getPlayerRoundState(1).hand, false); // Hidden
         updateSanityDisplay();
         updateButtons();
 
@@ -181,8 +190,8 @@ async function placeBet() {
     // Infer action
     // Need current state
     if (!gameState) return;
-    const player = gameState.players[0];
-    const toCall = gameState.current_bet - player.bet;
+    const playerState = getPlayerRoundState(0);
+    const toCall = gameState.current_bet - playerState.bet;
 
     let action = "check";
     let finalAmount = amount;
@@ -230,11 +239,13 @@ async function placeBet() {
 
         gameState = data; // Handler returns state directly
 
-        renderHand('player-hand', gameState.players[0].hand, true);
+        if (gameState.game_phase === 'complete' || gameState.game_phase === 'showdown') {
+            renderHand('opponent-hand', getPlayerRoundState(1).hand, true);
+        }
+
         updateSanityDisplay();
         updateButtons();
         document.getElementById('result').textContent = gameState.last_action;
-
     } catch (e) {
         console.error(e);
         document.getElementById('result').textContent = "Error: " + e.message;
@@ -248,14 +259,16 @@ async function fold() {
             body: JSON.stringify({ action: "fold", amount: 0 })
         });
         gameState = await res.json();
+
+        // Always reveal if specific flag or just game over?
+        // Backend sets reveal_on_fold
+        if (gameState.reveal_on_fold || gameState.game_phase === 'complete') {
+            renderHand('opponent-hand', getPlayerRoundState(1).hand, true);
+        }
+
         updateSanityDisplay();
         updateButtons();
         document.getElementById('result').textContent = gameState.last_action;
-
-        // If reveal on fold?
-        if (gameState.reveal_on_fold) {
-            renderHand('opponent-hand', gameState.players[1].hand, true);
-        }
     } catch (e) {
         console.error(e);
     }
@@ -268,8 +281,13 @@ async function submitDiscard() {
             body: JSON.stringify({ indices: discardIndices })
         });
         gameState = await res.json();
-        renderHand('player-hand', gameState.players[0].hand, true);
-        discardIndices = [];
+        discardIndices = [];  // Clear BEFORE render so new cards aren't greyed out
+        renderHand('player-hand', getPlayerRoundState(0).hand, true);
+
+        if (gameState.game_phase === 'complete' || gameState.game_phase === 'showdown') {
+            renderHand('opponent-hand', getPlayerRoundState(1).hand, true);
+        }
+
         updateButtons();
         document.getElementById('result').textContent = gameState.last_action;
     } catch (e) { console.error(e); }
@@ -282,7 +300,7 @@ async function showdown() {
         const data = await res.json();
         gameState = data.state;
 
-        renderHand('opponent-hand', gameState.players[1].hand, true);
+        renderHand('opponent-hand', getPlayerRoundState(1).hand, true);
         updateSanityDisplay();
         updateButtons();
         document.getElementById('result').textContent = data.result;
@@ -292,12 +310,66 @@ async function showdown() {
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     updateButtons();
-    // Maybe load state on refresh?
-    // fetch('/api/state')...
+    // Maybe load state on refresh - relying on user interaction or explicit refresh for now
 });
 window.addEventListener('click', () => {
     const audio = document.getElementById('ambient');
     if (audio) audio.play().catch(console.warn);
 }, { once: true });
+
+function checkGameOver() {
+    const overlay = document.getElementById('game-over-overlay');
+    if (gameState && gameState.game_phase === 'game_over') {
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
+async function rebuy() {
+    try {
+        const res = await safeFetch('/api/rebuy', { method: 'POST' });
+        gameState = await res.json();
+
+        // Reset UI
+        checkGameOver();
+        renderHand('player-hand', getPlayerRoundState(0).hand, true);
+        renderHand('opponent-hand', [], false);
+        updateSanityDisplay();
+        updateButtons();
+        document.getElementById('result').textContent = gameState.last_action;
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// Hook into update flow
+const originalUpdateButtons = updateButtons; // If needed, or just insert call
+// Better: Add checkGameOver to critical update points
+const superDeal = deal;
+deal = async function () {
+    await superDeal();
+    checkGameOver();
+};
+const superBet = placeBet;
+placeBet = async function () {
+    await superBet();
+    checkGameOver();
+};
+const superFold = fold;
+fold = async function () {
+    await superFold();
+    checkGameOver();
+};
+const superDismiss = submitDiscard;
+submitDiscard = async function () {
+    await superDismiss();
+    checkGameOver();
+};
+const superShowdown = showdown;
+showdown = async function () {
+    await superShowdown();
+    checkGameOver();
+};
 
 

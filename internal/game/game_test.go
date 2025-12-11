@@ -35,7 +35,7 @@ func TestFullGameLoop(t *testing.T) {
 		t.Errorf("Expected PhasePreDrawBetting, got %s", game.GamePhase)
 	}
 	// Player 0 (Human) and Player 1 (AI)
-	if len(game.Players[0].Hand) != 5 || len(game.Players[1].Hand) != 5 {
+	if len(game.RoundStates[0].Hand) != 5 || len(game.RoundStates[1].Hand) != 5 {
 		t.Errorf("Hands not dealt correctly")
 	}
 	if game.Pot != 20 { // 10 from each

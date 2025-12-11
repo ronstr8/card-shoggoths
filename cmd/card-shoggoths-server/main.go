@@ -29,6 +29,7 @@ func main() {
 	r.HandleFunc("/api/bet", server.ActionHandler) // Renamed from BetHandler
 	r.HandleFunc("/api/discard", server.DiscardHandler)
 	r.HandleFunc("/api/showdown", server.ShowdownHandler)
+	r.HandleFunc("/api/rebuy", server.RebuyHandler)
 	r.HandleFunc("/debug/clear-session", server.ClearSessionHandler)
 
 	log.Println("Serving on :8080...")
