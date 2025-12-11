@@ -2,15 +2,27 @@ package game
 
 import (
 	"math/rand"
+	"os"
+	"strconv"
 )
 
 // AIConfig holds configuration for the AI
 type AIConfig struct {
 	DiscardSimulations int
+	Courage            float64 // Multiplier for winProb (e.g., 1.0 = normal, 1.2 = brave, 0.8 = timid)
 }
 
 var DefaultAI = AIConfig{
 	DiscardSimulations: 100, // Number of trials per permutation
+	Courage:            1.2, // Default courage (Brave)
+}
+
+func init() {
+	if s := os.Getenv("AI_COURAGE"); s != "" {
+		if v, err := strconv.ParseFloat(s, 64); err == nil {
+			DefaultAI.Courage = v
+		}
+	}
 }
 
 // ScoreHand converts a HandValue into a comparable floating point score.
@@ -189,6 +201,12 @@ func (c AIConfig) DecideAction(hand Hand, gameState *GameState) (string, int) {
 		winProb = 0.95
 	}
 
+	// Apply Courage modifier
+	winProb *= c.Courage
+	if winProb > 0.99 {
+		winProb = 0.99
+	} // Cap at 99%
+
 	// Adjust based on game phase if needed (bluffing?)
 	// Simple logic for now.
 
@@ -199,7 +217,7 @@ func (c AIConfig) DecideAction(hand Hand, gameState *GameState) (string, int) {
 			return "bet", 20 // Standard size
 		}
 		// Bluff chance?
-		if rand.Float64() < 0.1 {
+		if rand.Float64() < 0.1*c.Courage {
 			return "bet", 10
 		}
 		return "check", 0
@@ -212,14 +230,14 @@ func (c AIConfig) DecideAction(hand Hand, gameState *GameState) (string, int) {
 	// If winProb much higher, Raise.
 
 	if winProb > potOdds+0.1 { // Margin of safety
-		if winProb > 0.8 && rand.Float64() < 0.7 {
+		if winProb > 0.8 && rand.Float64() < 0.7*c.Courage {
 			return "raise", 20
 		}
 		return "call", 0
 	}
 
 	// Bluff call?
-	if rand.Float64() < 0.05 {
+	if rand.Float64() < 0.05*c.Courage {
 		return "call", 0
 	}
 

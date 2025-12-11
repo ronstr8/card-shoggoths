@@ -1,23 +1,81 @@
         @keyframes static-flicker {
-            0%, 100% { opacity: 1; transform: translate(0, 0); }
-            10% { opacity: 0.95; transform: translate(-1px, 1px); }
-            20% { opacity: 0.9; transform: translate(1px, -2px); }
-            30% { opacity: 1; transform: translate(0px, 1px); }
-            40% { opacity: 0.92; transform: translate(-2px, 0); }
-            50% { opacity: 1; transform: translate(2px, 1px); }
-            60% { opacity: 0.97; transform: translate(1px, -1px); }
-            70% { opacity: 0.93; transform: translate(0, 2px); }
-            80% { opacity: 1; transform: translate(-1px, 0); }
-            90% { opacity: 0.96; transform: translate(2px, -1px); }
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: translate(0, 0);
+            }
+
+            10% {
+                opacity: 0.95;
+                transform: translate(-1px, 1px);
+            }
+
+            20% {
+                opacity: 0.9;
+                transform: translate(1px, -2px);
+            }
+
+            30% {
+                opacity: 1;
+                transform: translate(0px, 1px);
+            }
+
+            40% {
+                opacity: 0.92;
+                transform: translate(-2px, 0);
+            }
+
+            50% {
+                opacity: 1;
+                transform: translate(2px, 1px);
+            }
+
+            60% {
+                opacity: 0.97;
+                transform: translate(1px, -1px);
+            }
+
+            70% {
+                opacity: 0.93;
+                transform: translate(0, 2px);
+            }
+
+            80% {
+                opacity: 1;
+                transform: translate(-1px, 0);
+            }
+
+            90% {
+                opacity: 0.96;
+                transform: translate(2px, -1px);
+            }
         }
+
         @keyframes sanity-pulse {
-            0%, 100% { box-shadow: 0 0 10px rgba(57, 255, 20, 0.4); }
-            50% { box-shadow: 0 0 20px rgba(57, 255, 20, 0.8); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
+            }
         }
+
         @keyframes low-sanity-flash {
-            0%, 100% { background-color: #39ff14; }
-            50% { background-color: #ff1439; }
+
+            0%,
+            100% {
+                background-color: #39ff14;
+            }
+
+            50% {
+                background-color: #ff1439;
+            }
         }
+
         /* latin */
         @font-face {
             font-family: 'Creepster';
@@ -27,6 +85,12 @@
             src: url(https://fonts.gstatic.com/s/creepster/v13/AlZy_zVUqJz4yMrniH4Rcn35.woff2) format('woff2');
             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
         }
+
+        html {
+            overflow-y: scroll;
+            overflow-x: hidden;
+        }
+
         body {
             background-color: #0a0a0a;
             color: #39ff14;
@@ -39,115 +103,124 @@
             background-image: radial-gradient(#222 1px, transparent 1px);
             background-size: 5px 5px;
         }
+
         h1 {
-            font-size: 6em; /* Doubled from 3em */
+            font-size: 3em;
             text-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14;
-            margin-bottom: 0.5em;
-            margin-top: 0;
+            margin: 0.2em 0;
+            line-height: 1;
         }
+
         h2 {
             font-size: 1.5em;
             text-shadow: 0 0 8px #39ff14;
             margin: 0.5em 0;
         }
+
         h3 {
             font-size: 1.2em;
             text-shadow: 0 0 5px #39ff14;
             margin: 0.5em 0;
         }
+
         #game-container {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2em;
-            max-width: 1200px;
+            gap: 1em;
+            max-width: 1000px;
             margin: 0 auto;
+            height: 85vh;
+            justify-content: center;
         }
+
         .player-section {
             width: 100%;
             max-width: 800px;
         }
-        /* Sanity System Styling */
-        .sanity-container {
+
+        /* Scoreboard Styling */
+        #scoreboard {
+            width: 100%;
+            max-width: 600px;
+            padding: 0.5em;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #39ff14;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .sanity-row {
             display: flex;
             align-items: center;
-            justify-content: flex-start;
-            gap: 1em;
-            margin: 1em 0;
-            padding: 1em;
-            background: rgba(0, 0, 0, 0.5);
+            gap: 10px;
+            width: 100%;
+        }
+
+        .sanity-label {
+            font-size: 1em;
+            width: 100px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .sanity-bar-container.compact {
+            flex: 1;
+            height: 15px;
+            background: #111;
             border: 1px solid #39ff14;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(57, 255, 20, 0.3);
-        }
-        .sanity-player-name {
-            font-size: 1.2em;
-            font-weight: bold;
-            text-shadow: 0 0 5px #39ff14;
-            min-width: 150px;
-            text-align: left;
-        }
-        .sanity-emoji {
-            font-size: 2em;
-            text-shadow: 0 0 10px #39ff14;
-        }
-        .sanity-bar-container {
-            flex: 1;
-            height: 30px;
-            background: #111;
-            border: 2px solid #39ff14;
-            border-radius: 15px;
             overflow: hidden;
-            position: relative;
-            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
         }
+
         .sanity-bar {
             height: 100%;
             background: linear-gradient(90deg, #39ff14 0%, #ffff39 50%, #ff3939 100%);
             width: 100%;
             transition: width 0.5s ease;
-            animation: sanity-pulse 2s infinite;
-            border-radius: 13px;
         }
-        .sanity-bar[style*="width: 0%"] {
-            animation: low-sanity-flash 0.5s infinite;
-        }
+
         .sanity-text {
-            font-size: 1.2em;
-            font-weight: bold;
-            text-shadow: 0 0 5px #39ff14;
-            min-width: 3em;
+            width: 2em;
+            text-align: right;
         }
+
+        .sanity-emoji {
+            font-size: 1.2em;
+        }
+
         /* Hand Styling */
         .hand {
             display: flex;
             justify-content: center;
             flex-wrap: wrap;
             gap: 5px;
-            margin: 1em 0;
-            min-height: 140px;
+            margin: 0.5em 0;
+            min-height: 100px;
             align-items: center;
         }
+
         .card {
-            width: 100px;
-            height: 140px;
+            width: 80px;
+            height: 112px;
             cursor: pointer;
-            border: 2px solid transparent;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
-            transition: all 0.3s ease;
-            object-fit: cover;
+            border-radius: 6px;
+            box-shadow: 0 0 5px rgba(57, 255, 20, 0.4);
+            transition: all 0.2s ease;
         }
+
         .card:hover {
             transform: scale(1.05) translateY(-5px);
-            filter: brightness(1.2);
-            box-shadow: 0 5px 20px rgba(57, 255, 20, 0.6);
         }
+
         .card.discard {
             border-color: #ff1439;
             filter: grayscale(100%) brightness(0.6);
             transform: scale(0.95);
         }
+
         /* Controls Styling */
         .controls {
             display: flex;
@@ -157,11 +230,13 @@
             margin: 2em 0;
             flex-wrap: wrap;
         }
+
         #betting-controls {
             display: flex;
             align-items: center;
             gap: 0.5em;
         }
+
         button {
             background: #111;
             color: #39ff14;
@@ -177,17 +252,20 @@
             border-radius: 5px;
             transition: all 0.3s ease;
         }
+
         button:hover:not(:disabled) {
             background: #39ff14;
             color: #111;
             box-shadow: 0 0 20px rgba(57, 255, 20, 0.6);
             transform: translateY(-2px);
         }
+
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             filter: grayscale(100%);
         }
+
         input[type="number"] {
             background: #111;
             color: #39ff14;
@@ -200,88 +278,97 @@
             text-align: center;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
         }
+
         input[type="number"]:focus {
             outline: none;
             box-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
         }
+
         input[type="number"]:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
+
         /* Result Display */
         #result {
-            margin: 2em 0;
-            font-size: 1.3em;
+            margin: 0.5em 0;
+            font-size: 1.2em;
             font-weight: bold;
-            text-shadow: 0 0 10px #39ff14;
-            padding: 1em;
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 10px;
-            min-height: 2em;
+            text-shadow: 0 0 5px #39ff14;
+            min-height: 1.5em;
+        }
+
+        /* Action Bar */
+        #action-bar {
             display: flex;
+            width: 100%;
+            max-width: 800px;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
+            background: #111;
+            border-top: 2px solid #39ff14;
+            padding: 10px 20px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            margin: 0 auto;
+            border-radius: 10px 10px 0 0;
         }
-        /* Pot Styling */
-        #pot-container {
-            margin: 1em 0;
-            padding: 1em;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #39ff14;
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(57, 255, 20, 0.4);
-        }
-        #pot-display {
+
+        #pot-display-compact {
             font-size: 1.5em;
             font-weight: bold;
-            text-shadow: 0 0 10px #39ff14;
+            color: #ffff39;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button {
+            padding: 0.5em 1em;
+            font-size: 0.9em;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .hand {
-                gap: 3px;
+                gap: 2px;
             }
-            
-            .card {
-                width: 70px;
-                height: 98px;
-            }
-            
-            h1 {
-                font-size: 4em; /* Doubled from 2em */
-            }
-            
-            .sanity-container {
-                flex-direction: column;
-                gap: 0.5em;
-            }
-            
-            .sanity-bar-container {
-                width: 100%;
-                max-width: 300px;
-            }
-            
-            .controls {
-                gap: 0.5em;
-            }
-            
-            button {
-                padding: 0.5em 1em;
-                font-size: 0.9em;
-            }
-        }
-        @media (max-width: 480px) {
+
             .card {
                 width: 60px;
                 height: 84px;
             }
-            
+
             h1 {
-                font-size: 3em; /* Doubled from 1.5em */
+                font-size: 2em;
             }
-            
-            .sanity-emoji {
-                font-size: 1.5em;
+
+            #scoreboard {
+                gap: 2px;
+            }
+
+            #action-bar {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px;
+            }
+
+            .controls {
+                width: 100%;
+                justify-content: space-around;
+            }
+
+            button {
+                padding: 0.4em 0.8em;
+                font-size: 0.8em;
+                flex: 1;
             }
         }
-

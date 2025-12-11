@@ -42,7 +42,7 @@ func TestFullGameLoop(t *testing.T) {
 	}
 
 	// 3. Player Check
-	success = game.PlayerAction("check", 0)
+	success, _ = game.PlayerAction("check", 0)
 	if !success {
 		t.Errorf("Player check failed")
 	}

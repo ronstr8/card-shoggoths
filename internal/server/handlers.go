@@ -19,8 +19,22 @@ func DealHandler(w http.ResponseWriter, r *http.Request) {
 	defer mu.Unlock()
 
 	sid := getSessionID(w, r)
-	sessions[sid] = game.NewGame()
+	if _, ok := sessions[sid]; !ok {
+		sessions[sid] = game.NewGame()
+	}
 	state := sessions[sid]
+
+	// If the game is complete (or just starting), start a new round
+	if state.GamePhase == game.PhaseComplete || state.GamePhase == game.PhaseAnte {
+		state.NewRound()
+	} else {
+		// If dealing in middle of game, maybe reset?
+		// For safety, let's treat "Deal" as "New Hand/Reset"
+		state.NewRound()
+	}
+
+	// Auto-collect ante to start the game properly
+	state.CollectAnte(10)
 
 	writeJSON(w, state)
 }
@@ -37,7 +51,8 @@ func BetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload struct {
-		Amount int `json:"amount"`
+		Action string `json:"action"` // explicit action
+		Amount int    `json:"amount"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -45,17 +60,64 @@ func BetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !state.PlaceBet(payload.Amount) {
-		http.Error(w, "Invalid bet", http.StatusBadRequest)
+	// Infer action from amount if not provided
+	toCall := state.CurrentBet - state.PlayerBet
+	action := payload.Action
+	actionAmount := 0
+
+	if action == "" {
+		// Legacy inference logic
+		if payload.Amount == toCall {
+			action = "call"
+		} else if payload.Amount > toCall {
+			if toCall == 0 && state.CurrentBet == 0 {
+				action = "bet"
+				actionAmount = payload.Amount
+			} else {
+				action = "raise"
+				actionAmount = payload.Amount - toCall // Raise BY X
+			}
+		} else if payload.Amount == 0 && toCall == 0 {
+			action = "check"
+		} else {
+			http.Error(w, "Invalid bet amount", http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Handle explicit actions
+		if action == "bet" || action == "raise" {
+			// For raise/bet, we need to handle the amount correctly
+			// If action is raise, assume payload.Amount is the RAISE BY amount for consistency with frontend
+			// Or should we support absolute? stick to RAISE BY for now as per previous logic
+			if action == "raise" {
+				// Raise logic expects 'amount' to be the delta?
+				// Previous inference: actionAmount = payload.Amount - toCall
+				// But if frontend sends explicit "raise" + amount... let's assume `amount` IS the raise-by amount.
+				actionAmount = payload.Amount
+			} else if action == "bet" {
+				actionAmount = payload.Amount
+			}
+		}
+	}
+
+	success, msg := state.PlayerAction(action, actionAmount)
+	if !success {
+		errMsg := msg
+		if errMsg == "" {
+			errMsg = "Invalid action"
+		}
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return
 	}
 
-	// Opponent responds
-	response := state.OpponentRespond()
+	// Trigger opponent turn if it's their turn
+	if state.Turn == "opponent" {
+		state.OpponentTurn()
+	}
 
 	writeJSON(w, map[string]interface{}{
 		"state":   state,
-		"message": response,
+		"message": state.LastAction,
 	})
 }
 
@@ -84,9 +146,7 @@ func DiscardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game.ReplaceCards(&state.Deck, &state.PlayerHand, payload.Indices)
-	state.Discarded = true
-	state.GamePhase = game.PhaseComplete
+	state.PerformDiscard(payload.Indices)
 
 	writeJSON(w, state)
 }

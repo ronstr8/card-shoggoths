@@ -2,6 +2,9 @@
 run:
 	go run ./cmd/card-shoggoths-server
 
+dev:
+	air
+
 test:
 	go test ./internal/... ./cmd/...
 
