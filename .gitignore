@@ -1,1 +1,3 @@
 *.swp
+.air.toml
+data/

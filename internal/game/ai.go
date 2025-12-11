@@ -177,7 +177,9 @@ func (c AIConfig) DecideAction(hand Hand, gameState *GameState) (string, int) {
 	// Two Pair=2. 2,000,000.
 
 	// Pot Odds = Cost to Call / (Pot + Cost to Call)
-	callAmount := gameState.CurrentBet - gameState.OpponentBet
+	// AI is assumed to be Players[1]
+	opponent := gameState.Players[1]
+	callAmount := gameState.CurrentBet - opponent.Bet
 	pot := gameState.Pot
 
 	// Win Prob estimated

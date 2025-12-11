@@ -41,17 +41,17 @@ const (
 func (p GamePhase) String() string {
 	switch p {
 	case PhaseAnte:
-		return "deal"
+		return "ante" // Was "deal", changing to "ante" for clarity? Or keep "deal"? "ante" matches PhaseAnte.
 	case PhasePreDrawBetting:
-		return "bet" // Mapped to 'bet' for frontend
+		return "bet_pre"
 	case PhaseDiscard:
 		return "discard"
 	case PhasePostDrawBetting:
-		return "bet" // Reuse 'bet' for frontend
+		return "bet_post"
 	case PhaseShowdown:
 		return "showdown"
 	case PhaseComplete:
-		return "end"
+		return "complete" // Was "end"
 	default:
 		return "unknown"
 	}
@@ -61,27 +61,52 @@ func (p GamePhase) MarshalText() ([]byte, error) {
 	return []byte(p.String()), nil
 }
 
+func (p *GamePhase) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "ante", "deal": // Support legacy "deal"
+		*p = PhaseAnte
+	case "bet_pre":
+		*p = PhasePreDrawBetting
+	case "bet": // Unambiguous legacy mapping -> PreDraw
+		*p = PhasePreDrawBetting
+	case "discard":
+		*p = PhaseDiscard
+	case "bet_post":
+		*p = PhasePostDrawBetting
+	case "showdown":
+		*p = PhaseShowdown
+	case "complete", "end": // Support legacy "end"
+		*p = PhaseComplete
+	default:
+		return fmt.Errorf("unknown game phase: %s", string(text))
+	}
+	return nil
+}
+
 type GameState struct {
-	Deck           Deck      `json:"deck"`
-	PlayerHand     Hand      `json:"player_hand"`
-	OpponentHand   Hand      `json:"opponent_hand"`
-	Discarded      bool      `json:"discarded"`
-	Showdown       bool      `json:"showdown"`
-	PlayerSanity   int       `json:"player_sanity"`
-	OpponentSanity int       `json:"opponent_sanity"`
-	Pot            int       `json:"pot"`
-	Turn           string    `json:"turn"`
-	GamePhase      GamePhase `json:"game_phase"`
+	ID        string    `json:"id"` // For persistence
+	Deck      Deck      `json:"deck"`
+	Players   []*Player `json:"players"`
+	Pot       int       `json:"pot"`
+	TurnIndex int       `json:"turn_index"` // Index of player whose turn it is
+	GamePhase GamePhase `json:"game_phase"`
 
 	// Betting state
-	CurrentBet   int    `json:"current_bet"`    // Amount to call
-	PlayerBet    int    `json:"player_bet"`     // Amount player has put effectively in this round
-	OpponentBet  int    `json:"opponent_bet"`   // Amount opponent has put effectively in this round
-	LastAction   string `json:"last_action"`    // For UI display
-	ActivePlayer string `json:"active_player"`  // "player" or "opponent"
-	Winner       string `json:"winner"`         // Winner name if game over
-	RevealOnFold bool   `json:"reveal_on_fold"` // Config flag
-	OpponentName string `json:"opponent_name"`  // Name of the opponent
+	CurrentBet   int    `json:"current_bet"`   // Amount to call
+	LastAction   string `json:"last_action"`   // For UI display
+	ActivePlayer string `json:"active_player"` // Legacy string for UI ("player" or "opponent") - kept for compatibility/easier UI mapping for now
+	Winner       string `json:"winner"`        // Name of winner
+	RevealOnFold bool   `json:"reveal_on_fold"`
+}
+
+type Player struct {
+	Name      string `json:"name"`
+	IsAI      bool   `json:"is_ai"`
+	Hand      Hand   `json:"hand"`
+	Sanity    int    `json:"sanity"`
+	Bet       int    `json:"bet"` // Amount put in this round
+	Folded    bool   `json:"folded"`
+	Discarded bool   `json:"discarded"` // Has performed discard
 }
 
 func NewDeck() Deck {
@@ -96,6 +121,9 @@ func NewDeck() Deck {
 }
 
 func DealHand(deck *Deck, count int) Hand {
+	if len(*deck) < count {
+		return Hand{} // Should handle error
+	}
 	hand := append(Hand(nil), (*deck)[:count]...)
 	*deck = (*deck)[count:]
 	return hand
@@ -103,90 +131,101 @@ func DealHand(deck *Deck, count int) Hand {
 
 func ReplaceCards(deck *Deck, hand *Hand, indices []int) {
 	for _, i := range indices {
-		(*hand)[i] = (*deck)[0]
-		*deck = (*deck)[1:]
+		if i >= 0 && i < len(*hand) && len(*deck) > 0 {
+			(*hand)[i] = (*deck)[0]
+			*deck = (*deck)[1:]
+		}
 	}
 }
 
 func NewGame() *GameState {
 	deck := NewDeck()
-	// Hands are dealt after Ante
+
+	// Initialize Players
+	human := &Player{
+		Name:   "You",
+		IsAI:   false,
+		Sanity: 100,
+		Hand:   []Card{},
+	}
+	ai := &Player{
+		Name:   "The Ancient One",
+		IsAI:   true,
+		Sanity: 100,
+		Hand:   []Card{},
+	}
 
 	return &GameState{
-		Deck:           deck,
-		PlayerHand:     []Card{},
-		OpponentHand:   []Card{},
-		Discarded:      false,
-		Showdown:       false,
-		PlayerSanity:   100, // Starting sanity
-		OpponentSanity: 100, // Starting sanity
-		Pot:            0,
-		Turn:           "player",
-		GamePhase:      PhaseAnte,
-		CurrentBet:     0,
-		PlayerBet:      0,
-		OpponentBet:    0,
-		LastAction:     "Game started. Ante up!",
-		ActivePlayer:   "player",
-		RevealOnFold:   GlobalRevealOnFold,
-		OpponentName:   "The Ancient One",
+		Deck:         deck,
+		Players:      []*Player{human, ai},
+		TurnIndex:    0, // Human starts
+		GamePhase:    PhaseAnte,
+		Pot:          0,
+		CurrentBet:   0,
+		LastAction:   "Game started. Ante up!",
+		ActivePlayer: "player",
+		RevealOnFold: GlobalRevealOnFold,
 	}
 }
 
-type Player struct {
-	Name   string
-	Hand   Hand
-	Sanity int
-}
-
+// CollectAnte deducts ante and deals cards
 // CollectAnte deducts ante and deals cards
 func (g *GameState) CollectAnte(amount int) bool {
 	if g.GamePhase != PhaseAnte {
 		return false
 	}
-	if g.PlayerSanity < amount || g.OpponentSanity < amount {
-		// Not enough sanity to play
-		g.GamePhase = PhaseComplete
-		g.LastAction = "Not enough sanity for ante."
-		return false
+	// Check sanity
+	for _, p := range g.Players {
+		if p.Sanity < amount {
+			g.GamePhase = PhaseComplete
+			g.LastAction = fmt.Sprintf("%s has not enough sanity for ante.", p.Name)
+			return false
+		}
 	}
 
-	g.PlayerSanity -= amount
-	g.OpponentSanity -= amount
-	g.Pot += amount * 2
+	// Deduct ante
+	for _, p := range g.Players {
+		p.Sanity -= amount
+		g.Pot += amount
+	}
 	g.LastAction = fmt.Sprintf("Ante paid: %d", amount)
 
 	// Deal cards
-	g.PlayerHand = DealHand(&g.Deck, 5)
-	g.OpponentHand = DealHand(&g.Deck, 5)
+	for _, p := range g.Players {
+		p.Hand = DealHand(&g.Deck, 5)
+		p.Bet = 0
+		p.Folded = false
+		p.Discarded = false
+	}
 
 	// Transition to betting
 	g.GamePhase = PhasePreDrawBetting
 	g.CurrentBet = 0
-	g.PlayerBet = 0
-	g.OpponentBet = 0
-	g.Turn = "player" // Player acts first
-	g.ActivePlayer = "player"
+
+	// Reset turn to 0 (Human)
+	g.TurnIndex = 0
+	g.ActivePlayer = "player" // Keep legacy sync
 	return true
 }
 
 func (g *GameState) NewRound() {
 	deck := NewDeck()
-
-	// Reset round-specific state
 	g.Deck = deck
-	g.PlayerHand = []Card{}
-	g.OpponentHand = []Card{}
-	g.Discarded = false
-	g.Showdown = false
+
+	for _, p := range g.Players {
+		p.Hand = []Card{}
+		p.Bet = 0
+		p.Folded = false
+		p.Discarded = false
+	}
+
 	g.Pot = 0
-	g.Turn = "player"
+	g.TurnIndex = 0
 	g.GamePhase = PhaseAnte
 	g.CurrentBet = 0
-	g.PlayerBet = 0
-	g.OpponentBet = 0
 	g.LastAction = "New round started. Ante up!"
 	g.ActivePlayer = "player"
+	g.Winner = ""
 	g.RevealOnFold = GlobalRevealOnFold
 }
 
@@ -201,81 +240,79 @@ func init() {
 // ... (existing code)
 
 func (g *GameState) PlayerAction(action string, amount int) (bool, string) {
-	// Allow folding at any time as a "Force Quit" / Resign, provided game is active
+	// Security check: only allow actions for player 0 (human) via this method?
+	// The handler calls this. Let's assume this method is specifically for the Human Player (index 0).
+	player := g.Players[0]
+	opponent := g.Players[1]
+
+	// Allow folding at any time
 	if action == "fold" && g.GamePhase != PhaseComplete {
 		g.GamePhase = PhaseComplete
-		g.Winner = "opponent"
-		g.OpponentSanity += g.Pot
+		g.Winner = opponent.Name
+		opponent.Sanity += g.Pot
 		g.Pot = 0
-		g.LastAction = fmt.Sprintf("You folded. %s wins.", g.OpponentName)
-		g.Showdown = true // Ensure reveal logic works if enabled
+		g.LastAction = fmt.Sprintf("You folded. %s wins.", opponent.Name)
+		player.Folded = true
 		return true, ""
 	}
 
-	if g.Turn != "player" || g.GamePhase == PhaseComplete {
+	// Strictly enforce turn: Index 0
+	if g.TurnIndex != 0 || g.GamePhase == PhaseComplete {
 		return false, "It is not your turn."
 	}
 
 	switch action {
-	// "fold" handled above as special case
-
 	case "check":
-		if g.CurrentBet > g.PlayerBet {
+		if g.CurrentBet > player.Bet {
 			return false, "Cannot check when there is a bet to call."
 		}
 		g.LastAction = "You checked."
-		g.Turn = "opponent"
+		g.TurnIndex = 1
 		g.ActivePlayer = "opponent"
 		return true, ""
 
 	case "call":
-		toCall := g.CurrentBet - g.PlayerBet
+		toCall := g.CurrentBet - player.Bet
 		if toCall <= 0 {
-			// Actually, calling 0 IS a check. But let's separate them or allow it?
-			// UI should handle "Check" button visibility.
-			// But if user hits "Call" on 0 bet, treat as Check?
-			// Logic below says false. Let's return error "Nothing to call, use Check".
 			return false, "Nothing to call, please Check."
 		}
-		if g.PlayerSanity < toCall {
+		if player.Sanity < toCall {
 			return false, "Not enough sanity to call."
 		}
-		g.PlayerSanity -= toCall
+		player.Sanity -= toCall
 		g.Pot += toCall
-		g.PlayerBet += toCall
+		player.Bet += toCall
 		g.LastAction = "You called."
 
-		// Round ends if opponent was the aggressor
-		if g.OpponentBet == g.PlayerBet {
+		// Round ends if action closes betting
+		if opponent.Bet == player.Bet {
 			g.NextPhase()
 		} else {
-			g.Turn = "opponent"
+			g.TurnIndex = 1
 			g.ActivePlayer = "opponent"
 		}
 		return true, ""
 
 	case "bet", "raise":
-		// Raise BY amount logic
 		if amount <= 0 {
 			return false, "Bet amount must be positive."
 		}
-
-		totalCost := (g.CurrentBet - g.PlayerBet) + amount
-		if g.PlayerSanity < totalCost {
-			return false, fmt.Sprintf("Not enough sanity. You need %d but have %d.", totalCost, g.PlayerSanity)
+		totalCost := (g.CurrentBet - player.Bet) + amount
+		if player.Sanity < totalCost {
+			return false, fmt.Sprintf("Not enough sanity. You need %d but have %d.", totalCost, player.Sanity)
 		}
 
-		g.PlayerSanity -= totalCost
+		player.Sanity -= totalCost
 		g.Pot += totalCost
-		g.PlayerBet += totalCost
-		g.CurrentBet = g.PlayerBet
+		player.Bet += totalCost
+		g.CurrentBet = player.Bet
 
 		if action == "bet" {
 			g.LastAction = fmt.Sprintf("You bet %d.", amount)
 		} else {
 			g.LastAction = fmt.Sprintf("You raised by %d.", amount)
 		}
-		g.Turn = "opponent"
+		g.TurnIndex = 1
 		g.ActivePlayer = "opponent"
 		return true, ""
 	}
@@ -284,126 +321,123 @@ func (g *GameState) PlayerAction(action string, amount int) (bool, string) {
 }
 
 func (g *GameState) OpponentTurn() {
-	if g.Turn != "opponent" || g.GamePhase == PhaseComplete {
+	if g.TurnIndex != 1 || g.GamePhase == PhaseComplete {
 		return
 	}
 
+	player := g.Players[0]
+	opponent := g.Players[1]
+
 	// Use AI to decide action
 	ai := DefaultAI
-	action, amount := ai.DecideAction(g.OpponentHand, g)
+	// We need to support DecideAction possibly needing more context?
+	// For now pass Hand and GameState.
+	action, amount := ai.DecideAction(opponent.Hand, g)
 
 	switch action {
 	case "check":
 		// Verify check is legal (no bet to call)
-		if g.CurrentBet > g.OpponentBet {
-			// Forced to call (or fold, but AI said check which implies it thinks it can?
-			// Actually DecideAction logic handles call vs check based on input.
-			// But let's be safe. If we must call but tried to check, just call.
-			toCall := g.CurrentBet - g.OpponentBet
+		if g.CurrentBet > opponent.Bet {
+			// Forced to call if AI made a mistake
+			toCall := g.CurrentBet - opponent.Bet
 			if toCall > 0 {
 				// Fallback to call logic
-				if g.OpponentSanity >= toCall {
-					g.OpponentSanity -= toCall
+				if opponent.Sanity >= toCall {
+					opponent.Sanity -= toCall
 					g.Pot += toCall
-					g.OpponentBet += toCall
-					g.LastAction = fmt.Sprintf("%s calls.", g.OpponentName)
+					opponent.Bet += toCall
+					g.LastAction = fmt.Sprintf("%s calls.", opponent.Name)
 					g.NextPhase()
 				} else {
 					// Fold
 					g.GamePhase = PhaseComplete
-					g.Winner = "player"
-					g.PlayerSanity += g.Pot
+					g.Winner = player.Name
+					player.Sanity += g.Pot
 					g.Pot = 0
-					g.LastAction = fmt.Sprintf("%s folds (insufficient sanity).", g.OpponentName)
+					g.LastAction = fmt.Sprintf("%s folds (insufficient sanity).", opponent.Name)
+					opponent.Folded = true
 				}
 				return
 			}
 		}
 
-		g.LastAction = fmt.Sprintf("%s checks.", g.OpponentName)
+		g.LastAction = fmt.Sprintf("%s checks.", opponent.Name)
 		if g.ActivePlayer == "opponent" {
-			// If opponent acted second/last, round over
+			// If opponent acted second/last in sequence, usually NextPhase?
+			// Simplistic turn handling: If P0 Checked, P1 Checks -> Next
 			g.NextPhase()
 		} else {
-			// Player's turn next?
-			// "check" usually passes action.
-			// If Player Checked, Opponent Checks -> Round End.
-			// If Player Bet, Opponent Check -> Illegal, handled above.
-			// If new round (Opponent First?), Opp Check -> Player Turn.
-
-			// In this engine, who goes first?
-			// g.Turn = "player"?
-			// Let's assume generic state flip.
-			g.Turn = "player"
+			// If P1 (Opponent) is acting, give turn back to P0
+			g.TurnIndex = 0
 			g.ActivePlayer = "player"
 		}
 
 	case "call":
-		toCall := g.CurrentBet - g.OpponentBet
-		if toCall > g.OpponentSanity {
+		toCall := g.CurrentBet - opponent.Bet
+		if toCall > opponent.Sanity {
 			// Fold
 			g.GamePhase = PhaseComplete
-			g.Winner = "player"
-			g.PlayerSanity += g.Pot
+			g.Winner = player.Name
+			player.Sanity += g.Pot
 			g.Pot = 0
-			g.LastAction = "Opponent folds."
+			opponent.Folded = true
+			g.LastAction = fmt.Sprintf("%s folds.", opponent.Name)
 			return
 		}
-		g.OpponentSanity -= toCall
+		opponent.Sanity -= toCall
 		g.Pot += toCall
-		g.OpponentBet += toCall
-		g.LastAction = fmt.Sprintf("%s calls.", g.OpponentName)
+		opponent.Bet += toCall
+		g.LastAction = fmt.Sprintf("%s calls.", opponent.Name)
 		g.NextPhase()
 
 	case "bet", "raise":
-		// Raise amount
-		// amount returned by AI is 'raise by'
-		totalCost := (g.CurrentBet - g.OpponentBet) + amount
+		totalCost := (g.CurrentBet - opponent.Bet) + amount
 
-		if g.OpponentSanity < totalCost {
-			// Just call/check if can't afford raise
-			// Or all-in? Let's just call/check for simplicity to avoid side-pot logic
-			toCall := g.CurrentBet - g.OpponentBet
-			if toCall > 0 && g.OpponentSanity >= toCall {
-				g.OpponentSanity -= toCall
+		if opponent.Sanity < totalCost {
+			// Fallback: Call if possible
+			toCall := g.CurrentBet - opponent.Bet
+			if toCall > 0 && opponent.Sanity >= toCall {
+				opponent.Sanity -= toCall
 				g.Pot += toCall
-				g.OpponentBet += toCall
-				g.LastAction = fmt.Sprintf("%s calls.", g.OpponentName)
+				opponent.Bet += toCall
+				g.LastAction = fmt.Sprintf("%s calls.", opponent.Name)
 				g.NextPhase()
 			} else if toCall == 0 {
-				g.LastAction = fmt.Sprintf("%s checks.", g.OpponentName)
-				g.Turn = "player"
+				g.LastAction = fmt.Sprintf("%s checks.", opponent.Name)
+				g.TurnIndex = 0
 				g.ActivePlayer = "player"
 			} else {
 				// Fold
 				g.GamePhase = PhaseComplete
-				g.Winner = "player"
-				g.PlayerSanity += g.Pot
+				g.Winner = player.Name
+				player.Sanity += g.Pot
 				g.Pot = 0
-				g.LastAction = fmt.Sprintf("%s folds.", g.OpponentName)
+				opponent.Folded = true
+				g.LastAction = fmt.Sprintf("%s folds.", opponent.Name)
 			}
 			return
 		}
 
-		g.OpponentSanity -= totalCost
+		opponent.Sanity -= totalCost
 		g.Pot += totalCost
-		g.OpponentBet += totalCost
-		g.CurrentBet = g.OpponentBet
+		opponent.Bet += totalCost
+		g.CurrentBet = opponent.Bet
 
 		if action == "bet" {
-			g.LastAction = fmt.Sprintf("%s bets %d.", g.OpponentName, amount)
+			g.LastAction = fmt.Sprintf("%s bets %d.", opponent.Name, amount)
 		} else {
-			g.LastAction = fmt.Sprintf("%s raises by %d.", g.OpponentName, amount)
+			g.LastAction = fmt.Sprintf("%s raises by %d.", opponent.Name, amount)
 		}
-		g.Turn = "player"
+		g.TurnIndex = 0
 		g.ActivePlayer = "player"
 
 	case "fold":
 		g.GamePhase = PhaseComplete
-		g.Winner = "player"
-		g.PlayerSanity += g.Pot
+		g.Winner = player.Name
+		player.Sanity += g.Pot
 		g.Pot = 0
-		g.LastAction = fmt.Sprintf("%s folds. You win!", g.OpponentName)
+		opponent.Folded = true
+		g.LastAction = fmt.Sprintf("%s folds. You win!", opponent.Name)
 	}
 }
 
@@ -412,20 +446,18 @@ func (g *GameState) NextPhase() {
 	switch g.GamePhase {
 	case PhasePreDrawBetting:
 		g.GamePhase = PhaseDiscard
-		g.Turn = "player"
+		g.TurnIndex = 0
 		g.ActivePlayer = "player"
 		g.LastAction = "Betting complete. Choose cards to discard."
 		// Reset bets for next round
 		g.CurrentBet = 0
-		g.PlayerBet = 0
-		g.OpponentBet = 0
+		for _, p := range g.Players {
+			p.Bet = 0
+		}
 
 	case PhaseDiscard:
-		// After discard (assuming wait for both, but simplified: Player discards in UI, then immediately Opponent discards and we toggle phase)
-		// Wait, we need a distinct transitions.
-		// Let's assume this method is called after both have discarded.
 		g.GamePhase = PhasePostDrawBetting
-		g.Turn = "player"
+		g.TurnIndex = 0
 		g.ActivePlayer = "player"
 		g.LastAction = "Cards exchanged. Final betting round."
 
@@ -439,16 +471,21 @@ func (g *GameState) PerformDiscard(indices []int) {
 	if g.GamePhase != PhaseDiscard {
 		return
 	}
+	player := g.Players[0]
+	opponent := g.Players[1]
+
 	// Player discards
-	ReplaceCards(&g.Deck, &g.PlayerHand, indices)
+	ReplaceCards(&g.Deck, &player.Hand, indices)
+	player.Discarded = true
 
 	// Opponent discards using AI
 	ai := DefaultAI
-	oppIndices := ai.ChooseDiscard(g.OpponentHand)
+	oppIndices := ai.ChooseDiscard(opponent.Hand)
 
-	ReplaceCards(&g.Deck, &g.OpponentHand, oppIndices)
+	ReplaceCards(&g.Deck, &opponent.Hand, oppIndices)
+	opponent.Discarded = true
 
-	g.Discarded = true // Mark as done
+	// If both done (which they are), next phase
 	g.NextPhase()
 }
 
@@ -461,24 +498,28 @@ func (g *GameState) CanShowdown() bool {
 }
 
 func (g *GameState) CompleteShowdown() {
-	g.Showdown = true
+	// g.Showdown field meant "is showdown happening/visible"?
+	// We'll leave it for UI compatibility, but phase is Complete
 	g.GamePhase = PhaseComplete
 
-	result := CompareHands(g.PlayerHand, g.OpponentHand)
+	player := g.Players[0]
+	opponent := g.Players[1]
 
-	handRes := CompareHandsForDisplay(g.PlayerHand, g.OpponentHand)
+	result := CompareHands(player.Hand, opponent.Hand)
+
+	handRes := CompareHandsForDisplay(player.Hand, opponent.Hand)
 	g.LastAction = handRes.Message
 
 	switch result {
 	case ResultHand1Wins:
-		g.PlayerSanity += g.Pot
-		g.Winner = "player"
+		player.Sanity += g.Pot
+		g.Winner = player.Name
 	case ResultHand2Wins:
-		g.OpponentSanity += g.Pot
-		g.Winner = "opponent"
+		opponent.Sanity += g.Pot
+		g.Winner = opponent.Name
 	default:
-		g.PlayerSanity += g.Pot / 2
-		g.OpponentSanity += g.Pot / 2
+		player.Sanity += g.Pot / 2
+		opponent.Sanity += g.Pot / 2
 		g.Winner = "tie"
 	}
 	g.Pot = 0

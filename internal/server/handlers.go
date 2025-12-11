@@ -2,233 +2,184 @@ package server
 
 import (
 	"card-shoggoths/internal/game"
+	"card-shoggoths/internal/store"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/google/uuid"
 )
 
-// Session-based state tracking
-var sessions = map[string]*game.GameState{}
-var mu sync.Mutex
+var gameStore store.GameStore
 
-func DealHandler(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	sid := getSessionID(w, r)
-	if _, ok := sessions[sid]; !ok {
-		sessions[sid] = game.NewGame()
+// Init sets the storage backend
+func Init(s store.GameStore) {
+	gameStore = s
+}
+func getSessionID(w http.ResponseWriter, r *http.Request) string {
+	if cookie, err := r.Cookie("session_id"); err == nil {
+		log.Printf("[DEBUG] Cookie found: %s", cookie.Value)
+		return cookie.Value
 	}
-	state := sessions[sid]
-
-	// If the game is complete (or just starting), start a new round
-	if state.GamePhase == game.PhaseComplete || state.GamePhase == game.PhaseAnte {
-		state.NewRound()
-	} else {
-		// If dealing in middle of game, maybe reset?
-		// For safety, let's treat "Deal" as "New Hand/Reset"
-		state.NewRound()
-	}
-
-	// Auto-collect ante to start the game properly
-	state.CollectAnte(10)
-
-	writeJSON(w, state)
+	sessionID := uuid.NewString()
+	log.Printf("[DEBUG] No cookie found. Generated new Session ID: %s", sessionID)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	return sessionID
 }
 
-func BetHandler(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-
+func getGame(w http.ResponseWriter, r *http.Request) (*game.GameState, string) {
 	sid := getSessionID(w, r)
-	state, ok := sessions[sid]
-	if !ok {
-		http.Error(w, "No active game", http.StatusBadRequest)
+	g, err := gameStore.Load(sid)
+	if err != nil {
+		log.Printf("[DEBUG] Load failed for session %s: %v", sid, err)
+		return nil, sid
+	}
+	log.Printf("[DEBUG] Loaded game for session %s", sid)
+	return g, sid
+}
+
+func saveGame(id string, g *game.GameState) error {
+	if err := gameStore.Save(id, g); err != nil {
+		log.Printf("[ERROR] Failed to save session %s: %v", id, err)
+		return err
+	}
+	log.Printf("[DEBUG] Saved game for session %s", id)
+	return nil
+}
+
+func DealHandler(w http.ResponseWriter, r *http.Request) {
+	g, sid := getGame(w, r)
+	log.Printf("[DEBUG] DealHandler: Session %s", sid)
+
+	if g == nil {
+		g = game.NewGame()
+		g.ID = sid
+		log.Printf("[DEBUG] Created new game object for session %s", sid)
+	} else {
+		g.NewRound()
+	}
+
+	g.CollectAnte(10)
+	if err := saveGame(sid, g); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to save game state: %v", err), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, g)
+}
+
+func ActionHandler(w http.ResponseWriter, r *http.Request) {
+	g, sid := getGame(w, r)
+	if g == nil {
+		http.Error(w, "Game not found", http.StatusNotFound)
 		return
 	}
 
 	var payload struct {
-		Action string `json:"action"` // explicit action
+		Action string `json:"action"`
 		Amount int    `json:"amount"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	// Infer action from amount if not provided
-	toCall := state.CurrentBet - state.PlayerBet
-	action := payload.Action
-	actionAmount := 0
-
-	if action == "" {
-		// Legacy inference logic
-		if payload.Amount == toCall {
-			action = "call"
-		} else if payload.Amount > toCall {
-			if toCall == 0 && state.CurrentBet == 0 {
-				action = "bet"
-				actionAmount = payload.Amount
-			} else {
-				action = "raise"
-				actionAmount = payload.Amount - toCall // Raise BY X
-			}
-		} else if payload.Amount == 0 && toCall == 0 {
-			action = "check"
-		} else {
-			http.Error(w, "Invalid bet amount", http.StatusBadRequest)
-			return
-		}
-	} else {
-		// Handle explicit actions
-		if action == "bet" || action == "raise" {
-			// For raise/bet, we need to handle the amount correctly
-			// If action is raise, assume payload.Amount is the RAISE BY amount for consistency with frontend
-			// Or should we support absolute? stick to RAISE BY for now as per previous logic
-			if action == "raise" {
-				// Raise logic expects 'amount' to be the delta?
-				// Previous inference: actionAmount = payload.Amount - toCall
-				// But if frontend sends explicit "raise" + amount... let's assume `amount` IS the raise-by amount.
-				actionAmount = payload.Amount
-			} else if action == "bet" {
-				actionAmount = payload.Amount
-			}
-		}
-	}
-
-	success, msg := state.PlayerAction(action, actionAmount)
-	if !success {
-		errMsg := msg
-		if errMsg == "" {
-			errMsg = "Invalid action"
-		}
-		http.Error(w, errMsg, http.StatusBadRequest)
+	// Auto-fill defaults if legacy
+	if payload.Action == "" {
+		// Basic inference or default to 'call'/'check' logic?
+		// Prefer explicit actions now.
+		http.Error(w, "Action required", http.StatusBadRequest)
 		return
 	}
 
-	// Trigger opponent turn if it's their turn
-	if state.Turn == "opponent" {
-		state.OpponentTurn()
+	success, msg := g.PlayerAction(payload.Action, payload.Amount)
+	if !success {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
 	}
 
-	writeJSON(w, map[string]interface{}{
-		"state":   state,
-		"message": state.LastAction,
-	})
+	g.OpponentTurn()
+	if err := saveGame(sid, g); err != nil {
+		// Log but maybe don't fail the request completely since action succeeded?
+		// Actually, if we don't save, state is lost. Better to warn.
+		http.Error(w, "State save failed", http.StatusInternalServerError)
+		return
+	}
+
+	// Create response structure matching what frontend expects?
+	// Frontend expects "state" object or just the state itself?
+	// Previous code returned { "state": ... } in some places, or just state.
+	// Let's standardise on returning the State object directly, as app.js seems to assign result to gameState.
+	writeJSON(w, g)
 }
 
 func DiscardHandler(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	sid := getSessionID(w, r)
-	state, ok := sessions[sid]
-	if !ok {
-		state = game.NewGame()
-		sessions[sid] = state
+	g, sid := getGame(w, r)
+	if g == nil {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
 	}
 
-	if !state.CanDiscard() {
-		http.Error(w, "Cannot discard at this time", http.StatusBadRequest)
+	if !g.CanDiscard() {
+		http.Error(w, "Cannot discard now", http.StatusBadRequest)
 		return
 	}
 
 	var payload struct {
 		Indices []int `json:"indices"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	state.PerformDiscard(payload.Indices)
-
-	writeJSON(w, state)
+	g.PerformDiscard(payload.Indices)
+	if err := saveGame(sid, g); err != nil {
+		http.Error(w, "State save failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, g)
 }
 
 func ShowdownHandler(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	sid := getSessionID(w, r)
-	state, ok := sessions[sid]
-	if !ok {
-		http.Error(w, "No active game", http.StatusBadRequest)
+	g, sid := getGame(w, r)
+	if g == nil {
+		http.Error(w, "Game not found", http.StatusNotFound)
 		return
 	}
 
-	if !state.CanShowdown() {
-		http.Error(w, "Cannot showdown at this time", http.StatusBadRequest)
+	if !g.CanShowdown() {
+		http.Error(w, "Cannot showdown now", http.StatusBadRequest)
 		return
 	}
 
-	state.CompleteShowdown()
-	result := game.CompareHandsForDisplay(state.PlayerHand, state.OpponentHand)
+	g.CompleteShowdown()
+	saveGame(sid, g)
+
+	// Frontend expects { result: ..., state: ... }
+	player := g.Players[0]
+	opponent := g.Players[1]
+	result := game.CompareHandsForDisplay(player.Hand, opponent.Hand)
 
 	writeJSON(w, map[string]interface{}{
 		"result": result,
-		"state":  state,
+		"state":  g,
 	})
+}
+
+func ClearSessionHandler(w http.ResponseWriter, r *http.Request) {
+	// Not easily supported with SQLite without ID.
+	// For now just ignore or implement delete if strictly needed.
+	w.WriteHeader(http.StatusOK)
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Println("JSON encode error:", err)
-	}
-}
-
-// getSessionID will return an existing session_id cookie,
-// or create a new one and hand it back.
-func getSessionID(w http.ResponseWriter, r *http.Request) string {
-	log.Println("Attempting to retrieve session cookie")
-	// First, try to read the "session_id" cookie
-	if cookie, err := r.Cookie("session_id"); err == nil {
-		return cookie.Value
-	}
-	// If missing, make a new UUID, set a cookie, and return it
-	sessionID := uuid.NewString()
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		// you can also set Secure, SameSite, etc. here
-	})
-	return sessionID
-}
-
-func createNewSession(w http.ResponseWriter, r *http.Request) *game.GameState {
-	sessionID := uuid.NewString()
-	gs := game.NewGame()
-	mu.Lock()
-	sessions[sessionID] = gs
-	mu.Unlock()
-	cookie := &http.Cookie{
-		Name:  "session_id",
-		Value: sessionID,
-		Path:  "/",
-	}
-	http.SetCookie(w, cookie)
-	log.Printf("New session created with ID: %s", sessionID)
-	return gs
-}
-
-func ClearSessionHandler(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session_id")
-	if err != nil {
-		http.Error(w, "No session cookie found", http.StatusBadRequest)
-		return
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	delete(sessions, cookie.Value)
-	log.Printf("Cleared session for ID: %s", cookie.Value)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Session cleared"))
+	json.NewEncoder(w).Encode(v)
 }

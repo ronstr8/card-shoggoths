@@ -34,7 +34,8 @@ func TestFullGameLoop(t *testing.T) {
 	if game.GamePhase != PhasePreDrawBetting {
 		t.Errorf("Expected PhasePreDrawBetting, got %s", game.GamePhase)
 	}
-	if len(game.PlayerHand) != 5 || len(game.OpponentHand) != 5 {
+	// Player 0 (Human) and Player 1 (AI)
+	if len(game.Players[0].Hand) != 5 || len(game.Players[1].Hand) != 5 {
 		t.Errorf("Hands not dealt correctly")
 	}
 	if game.Pot != 20 { // 10 from each
@@ -42,12 +43,13 @@ func TestFullGameLoop(t *testing.T) {
 	}
 
 	// 3. Player Check
+	// Current implementation: PhasePreDrawBetting starts with Active Player (TurnIndex 0)
 	success, _ = game.PlayerAction("check", 0)
 	if !success {
 		t.Errorf("Player check failed")
 	}
-	if game.Turn != "opponent" {
-		t.Errorf("Expected opponent turn")
+	if game.TurnIndex != 1 {
+		t.Errorf("Expected opponent turn (index 1), got %d", game.TurnIndex)
 	}
 
 	// 4. Opponent Check (AI)
@@ -59,7 +61,7 @@ func TestFullGameLoop(t *testing.T) {
 	} else if game.GamePhase == PhasePreDrawBetting {
 		// Opponent Bet
 		// Player needs to Call/Fold
-		if game.Turn != "player" {
+		if game.TurnIndex != 0 {
 			t.Errorf("Expected player turn to respond to bet")
 		}
 		// Player Calls
@@ -94,7 +96,7 @@ func TestFullGameLoop(t *testing.T) {
 		t.Errorf("Expected PhaseComplete, got %s", game.GamePhase)
 	}
 
-	if game.Winner == "" {
-		t.Errorf("Expected a winner")
+	if game.Pot != 0 {
+		t.Errorf("Expected Pot to be 0 (distributed), got %d", game.Pot)
 	}
 }
