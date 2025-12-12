@@ -1,9 +1,65 @@
 let gameState = null;
 let discardIndices = [];
+let chatSocket = null;
 const HTTP_STATUS = {
     UNAUTHORIZED: 401,
     FORBIDDEN: 403
 };
+
+// ==================== WEBSOCKET CHAT ====================
+
+function connectChat() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat`;
+
+    chatSocket = new WebSocket(wsUrl);
+
+    chatSocket.onopen = () => {
+        console.log('[CHAT] Connected');
+    };
+
+    chatSocket.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data);
+            displayChatMessage(msg);
+        } catch (e) {
+            console.error('[CHAT] Parse error:', e);
+        }
+    };
+
+    chatSocket.onclose = () => {
+        console.log('[CHAT] Disconnected, reconnecting in 3s...');
+        setTimeout(connectChat, 3000);
+    };
+
+    chatSocket.onerror = (err) => {
+        console.error('[CHAT] Error:', err);
+    };
+}
+
+function displayChatMessage(msg) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    const msgEl = document.createElement('div');
+    msgEl.className = `chat-message ${msg.sender}`;
+
+    // Check if it's an emote (starts with *)
+    if (msg.text.startsWith('*') && msg.text.endsWith('*')) {
+        msgEl.classList.add('emote');
+        msgEl.innerHTML = `<span class="text">${msg.text}</span>`;
+    } else {
+        msgEl.innerHTML = `<span class="text">${msg.text}</span>`;
+    }
+
+    container.appendChild(msgEl);
+    container.scrollTop = container.scrollHeight;
+
+    // Keep only last 20 messages
+    while (container.children.length > 20) {
+        container.removeChild(container.firstChild);
+    }
+}
 
 // Fetch wrapper with session handling
 async function safeFetch(url, opts = {}) {
@@ -39,6 +95,14 @@ function renderSanity(prefix, name, sanity) {
     else if (sanity >= 10) icon = '😱';
 
     emoji.textContent = icon;
+
+    // Apply animation classes based on sanity thresholds
+    bar.classList.remove('sanity-pulse', 'sanity-critical');
+    if (sanity <= 20) {
+        bar.classList.add('sanity-critical');  // Flashing red warning
+    } else if (sanity <= 50) {
+        bar.classList.add('sanity-pulse');     // Pulsing glow
+    }
 }
 
 function updateSanityDisplay() {
@@ -131,11 +195,16 @@ function updateButtons() {
 
     const playerState = getPlayerRoundState(0);
 
+    // ESP is only available between rounds or when game over
+    const canESP = (phase === "complete" || phase === "ante" || phase === "game_over");
+    const espBtn = document.getElementById('esp-btn');
+
     if (dealBtn) dealBtn.disabled = !isComplete && phase !== "ante" && phase !== "deal";
     if (betBtn) betBtn.disabled = !isBetting;
     if (foldBtn) foldBtn.disabled = (!isBetting && !isDiscard);
     if (discardBtn) discardBtn.disabled = !isDiscard || (playerState && playerState.discarded);
     if (showdownBtn) showdownBtn.disabled = !(phase === "showdown");
+    if (espBtn) espBtn.disabled = !canESP;
 
     // Input Handling
     if (isBetting && playerState) {
@@ -309,13 +378,37 @@ async function showdown() {
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
-    updateButtons();
-    // Maybe load state on refresh - relying on user interaction or explicit refresh for now
+    loadState();
+    connectChat();
 });
 window.addEventListener('click', () => {
     const audio = document.getElementById('ambient');
     if (audio) audio.play().catch(console.warn);
 }, { once: true });
+
+async function loadState() {
+    try {
+        const res = await safeFetch('/api/state');
+        const data = await res.json();
+        if (data) {
+            gameState = data;
+            updateSanityDisplay();
+            updateButtons();
+            if (getPlayerRoundState(0) && getPlayerRoundState(0).hand) {
+                renderHand('player-hand', getPlayerRoundState(0).hand, true);
+            }
+            if (getPlayerRoundState(1) && getPlayerRoundState(1).hand) {
+                renderHand('opponent-hand', getPlayerRoundState(1).hand, false);
+            }
+            document.getElementById('result').textContent = gameState.last_action || '';
+            checkGameOver();
+        }
+    } catch (e) {
+        console.error('Failed to load state:', e);
+    }
+    updateButtons();
+}
+
 
 function checkGameOver() {
     const overlay = document.getElementById('game-over-overlay');
@@ -372,4 +465,171 @@ showdown = async function () {
     checkGameOver();
 };
 
+// ==================== ESP MINIGAME ====================
 
+let espSelection1 = -1;  // Selected index from hand1
+let espSelection2 = -1;  // Selected index from hand2
+let espTimerInterval = null;
+const ESP_TIME_LIMIT = 15; // seconds
+
+async function startESP() {
+    try {
+        const res = await safeFetch('/api/esp/start', { method: 'POST' });
+        if (!res.ok) {
+            const errMsg = await res.text();
+            document.getElementById('result').textContent = errMsg;
+            return;
+        }
+        gameState = await res.json();
+
+        espSelection1 = -1;
+        espSelection2 = -1;
+
+        renderESPHands();
+        document.getElementById('esp-overlay').classList.remove('hidden');
+        document.getElementById('esp-result').textContent = gameState.last_action;
+        updateESPButton();
+        startESPTimer();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function startESPTimer() {
+    clearInterval(espTimerInterval);
+    let timeLeft = ESP_TIME_LIMIT;
+    updateTimerDisplay(timeLeft);
+
+    espTimerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay(timeLeft);
+
+        if (timeLeft <= 0) {
+            clearInterval(espTimerInterval);
+            espTimeout();
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay(seconds) {
+    const resultEl = document.getElementById('esp-result');
+    const themeMsg = gameState && gameState.esp ? gameState.last_action : '';
+    resultEl.textContent = `${themeMsg} (${seconds}s)`;
+
+    // Visual urgency
+    if (seconds <= 5) {
+        resultEl.style.color = '#ff1439';
+    } else {
+        resultEl.style.color = '#9b59b6';
+    }
+}
+
+function espTimeout() {
+    // Time ran out - penalty and close
+    if (gameState && gameState.players && gameState.players[0]) {
+        gameState.players[0].sanity -= 10;
+    }
+    document.getElementById('esp-result').textContent = "Time's up! The visions fade... -10 Sanity";
+    updateSanityDisplay();
+
+    setTimeout(() => {
+        exitESP();
+    }, 1500);
+}
+
+function renderESPHands() {
+    if (!gameState || !gameState.esp) return;
+
+    const hand1Container = document.getElementById('esp-hand1');
+    const hand2Container = document.getElementById('esp-hand2');
+
+    hand1Container.innerHTML = '';
+    hand2Container.innerHTML = '';
+
+    // Render hand1 (top row)
+    gameState.esp.hand1.forEach((card, idx) => {
+        const img = document.createElement('img');
+        img.src = `cards/${card.rank}_of_${card.suit}.png`;
+        img.className = 'card esp-card';
+        img.alt = `${card.rank} of ${card.suit}`;
+        img.onclick = () => selectESPCard(1, idx, img);
+        if (espSelection1 === idx) img.classList.add('esp-selected');
+        hand1Container.appendChild(img);
+    });
+
+    // Render hand2 (bottom row)
+    gameState.esp.hand2.forEach((card, idx) => {
+        const img = document.createElement('img');
+        img.src = `cards/${card.rank}_of_${card.suit}.png`;
+        img.className = 'card esp-card';
+        img.alt = `${card.rank} of ${card.suit}`;
+        img.onclick = () => selectESPCard(2, idx, img);
+        if (espSelection2 === idx) img.classList.add('esp-selected');
+        hand2Container.appendChild(img);
+    });
+}
+
+function selectESPCard(hand, idx, img) {
+    // Remove previous selection from this hand
+    const container = hand === 1 ? document.getElementById('esp-hand1') : document.getElementById('esp-hand2');
+    container.querySelectorAll('.esp-selected').forEach(el => el.classList.remove('esp-selected'));
+
+    // Set new selection
+    if (hand === 1) {
+        espSelection1 = idx;
+    } else {
+        espSelection2 = idx;
+    }
+    img.classList.add('esp-selected');
+
+    updateESPButton();
+}
+
+function updateESPButton() {
+    const btn = document.getElementById('esp-guess-btn');
+    btn.disabled = !(espSelection1 >= 0 && espSelection2 >= 0);
+}
+
+async function submitESPGuess() {
+    if (espSelection1 < 0 || espSelection2 < 0) return;
+
+    try {
+        const res = await safeFetch('/api/esp/guess', {
+            method: 'POST',
+            body: JSON.stringify({ index1: espSelection1, index2: espSelection2 })
+        });
+        const data = await res.json();
+        gameState = data.state;
+
+        document.getElementById('esp-result').textContent = gameState.last_action;
+        updateSanityDisplay();
+
+        if (data.correct || gameState.game_phase === 'game_over') {
+            // Close ESP overlay
+            clearInterval(espTimerInterval);
+            setTimeout(() => {
+                document.getElementById('esp-overlay').classList.add('hidden');
+                checkGameOver();
+            }, 1500);
+        } else {
+            // Wrong guess - reset selections for another try
+            espSelection1 = -1;
+            espSelection2 = -1;
+            renderESPHands();
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function exitESP() {
+    clearInterval(espTimerInterval);
+    try {
+        const res = await safeFetch('/api/esp/exit', { method: 'POST' });
+        gameState = await res.json();
+        document.getElementById('esp-overlay').classList.add('hidden');
+        document.getElementById('result').textContent = gameState.last_action;
+    } catch (e) {
+        console.error(e);
+    }
+}

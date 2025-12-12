@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"time"
 )
 
 type Suit string
@@ -37,6 +38,7 @@ const (
 	PhaseShowdown
 	PhaseComplete
 	PhaseGameOver
+	PhaseESP
 )
 
 func (p GamePhase) String() string {
@@ -55,6 +57,8 @@ func (p GamePhase) String() string {
 		return "complete"
 	case PhaseGameOver:
 		return "game_over"
+	case PhaseESP:
+		return "esp"
 	default:
 		return "unknown"
 	}
@@ -82,6 +86,8 @@ func (p *GamePhase) UnmarshalText(text []byte) error {
 		*p = PhaseComplete
 	case "game_over":
 		*p = PhaseGameOver
+	case "esp":
+		*p = PhaseESP
 	default:
 		return fmt.Errorf("unknown game phase: %s", string(text))
 	}
@@ -103,6 +109,20 @@ type GameState struct {
 	ActivePlayer string `json:"active_player"` // Legacy string for UI ("player" or "opponent") - kept for compatibility/easier UI mapping for now
 	Winner       string `json:"winner"`        // Name of winner
 	RevealOnFold bool   `json:"reveal_on_fold"`
+
+	// ESP Minigame state
+	ESP *ESPState `json:"esp,omitempty"`
+}
+
+// ESPState holds the state for the ESP training minigame
+type ESPState struct {
+	Hand1       Hand   `json:"hand1"`        // Top row (opponent's side)
+	Hand2       Hand   `json:"hand2"`        // Bottom row (player's side)
+	MatchIndex1 int    `json:"match_index1"` // Index in Hand1 of the matching card
+	MatchIndex2 int    `json:"match_index2"` // Index in Hand2 of the matching card
+	Attempts    int    `json:"attempts"`     // Number of guesses made
+	Theme       string `json:"theme"`        // "primes", "faces", "odds", "evens"
+	StartTime   int64  `json:"start_time"`   // Unix timestamp when ESP started
 }
 
 type Player struct {
@@ -136,6 +156,10 @@ func DealHand(deck *Deck, count int) Hand {
 	hand := append(Hand(nil), (*deck)[:count]...)
 	*deck = (*deck)[count:]
 	return hand
+}
+
+func ShuffleDeck(deck *Deck) {
+	rand.Shuffle(len(*deck), func(i, j int) { (*deck)[i], (*deck)[j] = (*deck)[j], (*deck)[i] })
 }
 
 func ReplaceCards(deck *Deck, hand *Hand, indices []int) {
@@ -552,5 +576,125 @@ func (g *GameState) CompleteShowdown() {
 	if player.Sanity <= 0 {
 		g.GamePhase = PhaseGameOver
 		g.LastAction = fmt.Sprintf("%s You lost everything. Game Over.", handRes.Message)
+	}
+}
+
+// CanStartESP checks if ESP training is allowed in current phase
+func (g *GameState) CanStartESP() bool {
+	return g.GamePhase == PhaseComplete || g.GamePhase == PhaseAnte || g.GamePhase == PhaseGameOver
+}
+
+// ESP mystic themes - each uses a subset of ranks
+var espThemes = map[string][]Rank{
+	"primes": {"2", "3", "5", "7"},                 // Prime numbers
+	"faces":  {"jack", "queen", "king", "ace"},     // Face cards
+	"odds":   {"3", "5", "7", "9", "jack", "king"}, // Odd values
+	"evens":  {"2", "4", "6", "8", "10", "queen"},  // Even values
+}
+
+var espThemeNames = []string{"primes", "faces", "odds", "evens"}
+var espThemeMessages = map[string]string{
+	"primes": "The primes align... 2, 3, 5, 7...",
+	"faces":  "Royal visions emerge...",
+	"odds":   "Odd energies swirl...",
+	"evens":  "Even patterns crystallize...",
+}
+
+// StartESP initializes the ESP minigame with themed cards
+func (g *GameState) StartESP() (bool, string) {
+	if !g.CanStartESP() {
+		return false, "The spirits are occupied. Complete your current hand first."
+	}
+
+	// Pick a random mystic theme
+	theme := espThemeNames[rand.Intn(len(espThemeNames))]
+	allowedRanks := espThemes[theme]
+
+	// Build a deck with only allowed ranks
+	var themedDeck Deck
+	for _, s := range Suits {
+		for _, r := range allowedRanks {
+			themedDeck = append(themedDeck, Card{Suit: s, Rank: r})
+		}
+	}
+	ShuffleDeck(&themedDeck)
+
+	// Deal two hands of 5 cards each from themed deck
+	hand1 := DealHand(&themedDeck, 5)
+	hand2 := DealHand(&themedDeck, 5)
+
+	// Guarantee at least one match by forcing a rank match
+	matchIdx1 := rand.Intn(5)
+	matchIdx2 := rand.Intn(5)
+
+	// Make hand2[matchIdx2] have the same rank as hand1[matchIdx1]
+	targetRank := hand1[matchIdx1].Rank
+	for i, card := range themedDeck {
+		if card.Rank == targetRank {
+			hand2[matchIdx2] = card
+			themedDeck = append(themedDeck[:i], themedDeck[i+1:]...)
+			break
+		}
+	}
+
+	g.ESP = &ESPState{
+		Hand1:       hand1,
+		Hand2:       hand2,
+		MatchIndex1: matchIdx1,
+		MatchIndex2: matchIdx2,
+		Attempts:    0,
+		Theme:       theme,
+		StartTime:   time.Now().Unix(),
+	}
+	g.GamePhase = PhaseESP
+	g.LastAction = espThemeMessages[theme] + " Find the matching cards!"
+	return true, g.LastAction
+}
+
+// GuessESP checks if the player's guess is correct
+// Returns (correct, message)
+func (g *GameState) GuessESP(idx1, idx2 int) (bool, string) {
+	if g.ESP == nil || g.GamePhase != PhaseESP {
+		return false, "Not in ESP mode"
+	}
+
+	if idx1 < 0 || idx1 >= 5 || idx2 < 0 || idx2 >= 5 {
+		return false, "Invalid card selection"
+	}
+
+	g.ESP.Attempts++
+
+	// Check if the ranks match
+	if g.ESP.Hand1[idx1].Rank == g.ESP.Hand2[idx2].Rank {
+		// Correct!
+		reward := 15
+		g.Players[0].Sanity += reward
+		g.LastAction = fmt.Sprintf("Your mind pierces the veil! +%d Sanity", reward)
+		g.GamePhase = PhaseComplete
+		g.ESP = nil
+		return true, g.LastAction
+	}
+
+	// Wrong guess
+	penalty := 5
+	g.Players[0].Sanity -= penalty
+	g.ESP.Attempts++
+
+	if g.Players[0].Sanity <= 0 {
+		g.GamePhase = PhaseGameOver
+		g.LastAction = "The visions consumed you. Game Over."
+		return false, g.LastAction
+	}
+
+	g.LastAction = fmt.Sprintf("The cards blur... -%d Sanity. Try again.", penalty)
+	return false, g.LastAction
+}
+
+// ExitESP allows the player to leave ESP training early
+func (g *GameState) ExitESP() {
+	if g.GamePhase == PhaseESP {
+		g.GamePhase = PhaseComplete
+		g.ESP = nil
+		g.LastAction = "You close your third eye."
 	}
 }

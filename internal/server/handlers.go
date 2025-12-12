@@ -71,6 +71,20 @@ func DealHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to save game state: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Ancient One comments on the deal
+	go SendAncientMessage(sid, "deal")
+
+	writeJSON(w, g)
+}
+
+func StateHandler(w http.ResponseWriter, r *http.Request) {
+	g, _ := getGame(w, r)
+	if g == nil {
+		// No game exists yet, return empty/null
+		writeJSON(w, nil)
+		return
+	}
 	writeJSON(w, g)
 }
 
@@ -112,10 +126,14 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create response structure matching what frontend expects?
-	// Frontend expects "state" object or just the state itself?
-	// Previous code returned { "state": ... } in some places, or just state.
-	// Let's standardise on returning the State object directly, as app.js seems to assign result to gameState.
+	// Ancient One reacts to player action
+	switch payload.Action {
+	case "fold":
+		go SendAncientMessage(sid, "player_fold")
+	case "bet", "call", "raise", "check":
+		go SendAncientMessage(sid, "player_bet")
+	}
+
 	writeJSON(w, g)
 }
 
@@ -162,6 +180,13 @@ func ShowdownHandler(w http.ResponseWriter, r *http.Request) {
 	g.CompleteShowdown()
 	saveGame(sid, g)
 
+	// Ancient One reacts to outcome
+	if g.Winner == g.Players[0].Name {
+		go SendAncientMessage(sid, "player_wins")
+	} else if g.Winner == g.Players[1].Name {
+		go SendAncientMessage(sid, "ancient_wins")
+	}
+
 	// Frontend expects { result: ..., state: ... }
 	playerHand := g.RoundStates[0].Hand
 	opponentHand := g.RoundStates[1].Hand
@@ -193,6 +218,59 @@ func RebuyHandler(w http.ResponseWriter, r *http.Request) {
 		g = newGame
 		g.CollectAnte(10)
 	}
+	saveGame(sid, g)
+	writeJSON(w, g)
+}
+
+func ESPStartHandler(w http.ResponseWriter, r *http.Request) {
+	g, sid := getGame(w, r)
+	if g == nil {
+		http.Error(w, "Game not found. Deal first.", http.StatusNotFound)
+		return
+	}
+
+	ok, msg := g.StartESP()
+	if !ok {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	saveGame(sid, g)
+	writeJSON(w, g)
+}
+
+func ESPGuessHandler(w http.ResponseWriter, r *http.Request) {
+	g, sid := getGame(w, r)
+	if g == nil {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+
+	var payload struct {
+		Index1 int `json:"index1"`
+		Index2 int `json:"index2"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	correct, _ := g.GuessESP(payload.Index1, payload.Index2)
+	saveGame(sid, g)
+
+	writeJSON(w, map[string]interface{}{
+		"correct": correct,
+		"state":   g,
+	})
+}
+
+func ESPExitHandler(w http.ResponseWriter, r *http.Request) {
+	g, sid := getGame(w, r)
+	if g == nil {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+
+	g.ExitESP()
 	saveGame(sid, g)
 	writeJSON(w, g)
 }

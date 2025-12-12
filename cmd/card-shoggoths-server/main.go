@@ -25,11 +25,16 @@ func main() {
 	r.Handle("/*", http.FileServer(http.Dir("./static")))
 
 	log.Println("Registering handlers...")
+	r.HandleFunc("/api/state", server.StateHandler)
 	r.HandleFunc("/api/deal", server.DealHandler)
 	r.HandleFunc("/api/bet", server.ActionHandler) // Renamed from BetHandler
 	r.HandleFunc("/api/discard", server.DiscardHandler)
 	r.HandleFunc("/api/showdown", server.ShowdownHandler)
 	r.HandleFunc("/api/rebuy", server.RebuyHandler)
+	r.HandleFunc("/api/esp/start", server.ESPStartHandler)
+	r.HandleFunc("/api/esp/guess", server.ESPGuessHandler)
+	r.HandleFunc("/api/esp/exit", server.ESPExitHandler)
+	r.HandleFunc("/ws/chat", server.ChatHandler)
 	r.HandleFunc("/debug/clear-session", server.ClearSessionHandler)
 
 	log.Println("Serving on :8080...")

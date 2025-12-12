@@ -5,8 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Shoggoths</title>
-    <script type="application/javascript" src="js/app.js"></script>
+
+    <script defer src="js/app.js?v=5"></script>
     <link rel="stylesheet" href="css/style.css">
+
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
 </head>
 
 <body>
@@ -60,9 +67,16 @@
                 </div>
                 <button id="discard-btn" onclick="submitDiscard()" disabled>Discard</button>
                 <button id="showdown-btn" onclick="showdown()" disabled>Reveal</button>
+                <button id="esp-btn" onclick="startESP()">🔮 ESP</button>
             </div>
         </div>
     </div>
+    </div>
+
+    <!-- Chat Box -->
+    <div id="chat-container">
+        <div id="chat-header">🦑 Ancient One</div>
+        <div id="chat-messages"></div>
     </div>
 
     <!-- Game Over Overlay -->
@@ -72,6 +86,21 @@
             <h2>Sanity Depleted</h2>
             <p>Your mind has unraveled.</p>
             <button id="rebuy-btn" onclick="rebuy()">Rebuy YOUR SOUL</button>
+        </div>
+    </div>
+
+    <!-- ESP Training Overlay -->
+    <div id="esp-overlay" class="overlay hidden">
+        <div class="overlay-content esp-content">
+            <h2>🔮 ESP Training</h2>
+            <p>Find the matching pair!</p>
+            <div id="esp-hand1" class="hand esp-hand"></div>
+            <div id="esp-hand2" class="hand esp-hand"></div>
+            <div id="esp-result"></div>
+            <div class="esp-controls">
+                <button id="esp-guess-btn" onclick="submitESPGuess()" disabled>Match!</button>
+                <button id="esp-exit-btn" onclick="exitESP()">Exit</button>
+            </div>
         </div>
     </div>
 </body>
