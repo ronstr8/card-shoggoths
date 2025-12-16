@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"os"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Suit string
@@ -125,12 +127,19 @@ type ESPState struct {
 	StartTime   int64  `json:"start_time"`   // Unix timestamp when ESP started
 }
 
+// Player IDs
+const (
+	// AncientOneID is a fixed UUID for the stock Ancient One player
+	// Starts with 'a' to be safe-ish for CSS if used directly, though we should avoid that.
+	AncientOneID = "a11ce101-0000-4000-8000-000000000666"
+)
+
 type Player struct {
+	ID     string `json:"id"`
 	Name   string `json:"name"`
 	IsAI   bool   `json:"is_ai"`
 	Sanity int    `json:"sanity"`
 }
-
 type RoundState struct {
 	Hand      Hand `json:"hand"`
 	Bet       int  `json:"bet"` // Amount put in this round
@@ -171,16 +180,21 @@ func ReplaceCards(deck *Deck, hand *Hand, indices []int) {
 	}
 }
 
-func NewGame() *GameState {
+func NewGame(playerID string) *GameState {
 	deck := NewDeck()
 
 	// Initialize Players (Identity)
+	if playerID == "" {
+		playerID = uuid.New().String()
+	}
 	human := &Player{
+		ID:     playerID,
 		Name:   "You",
 		IsAI:   false,
 		Sanity: 100,
 	}
 	ai := &Player{
+		ID:     AncientOneID,
 		Name:   "The Ancient One",
 		IsAI:   true,
 		Sanity: 100,

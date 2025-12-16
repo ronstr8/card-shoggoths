@@ -59,7 +59,7 @@ func DealHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[DEBUG] DealHandler: Session %s", sid)
 
 	if g == nil {
-		g = game.NewGame()
+		g = game.NewGame("")
 		g.ID = sid
 		log.Printf("[DEBUG] Created new game object for session %s", sid)
 	} else {
@@ -208,12 +208,16 @@ func RebuyHandler(w http.ResponseWriter, r *http.Request) {
 	g, sid := getGame(w, r)
 	if g == nil {
 		// No game exists, create one
-		g = game.NewGame()
+		g = game.NewGame("")
 		g.ID = sid
 		g.CollectAnte(10) // Auto-start
 	} else {
-		// Reset logic: New Game completely
-		newGame := game.NewGame()
+		// Reset logic: New Game completely (preserve player ID)
+		playerID := ""
+		if len(g.Players) > 0 {
+			playerID = g.Players[0].ID
+		}
+		newGame := game.NewGame(playerID)
 		newGame.ID = sid
 		g = newGame
 		g.CollectAnte(10)

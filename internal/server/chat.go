@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"card-shoggoths/internal/game"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -17,7 +19,7 @@ var upgrader = websocket.Upgrader{
 
 // ChatMessage represents a message in the chat
 type ChatMessage struct {
-	Sender    string `json:"sender"` // "ancient_one" or "player"
+	Sender    string `json:"sender"` // game.Player.ID
 	Text      string `json:"text"`
 	Type      string `json:"type"` // "speech", "emote", "system"
 	Timestamp int64  `json:"timestamp"`
@@ -93,8 +95,8 @@ var ancientQuips = map[string][]string{
 		"*grudging respect*",
 	},
 	"esp_fail": {
-		"*laughs in cosmic horror*",
-		"Your third eye remains... clouded.",
+		"*laughs with darkly comical whimsy*",
+		"Your third eye remains ... clouded.",
 		"The visions elude you.",
 	},
 	"greeting": {
@@ -137,7 +139,7 @@ func SendToClient(sessionID string, msg ChatMessage) {
 // SendAncientMessage sends a message from the Ancient One
 func SendAncientMessage(sessionID, situation string) {
 	msg := ChatMessage{
-		Sender: "ancient_one",
+		Sender: game.AncientOneID,
 		Text:   GetAncientQuip(situation),
 		Type:   "speech",
 	}

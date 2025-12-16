@@ -325,11 +325,12 @@ func CompareHandsForDisplay(playerHand, opponentHand []Card) HandComparisonResul
 	case ResultHand1Wins:
 		winner = "player"
 		if playerValue.Rank == opponentValue.Rank {
-			if playerValue.Rank == OnePair {
+			switch playerValue.Rank {
+			case OnePair:
 				message = fmt.Sprintf("You win with %s! The Ancient One had a lesser pair.", playerHandName)
-			} else if playerValue.Rank == TwoPair {
+			case TwoPair:
 				message = fmt.Sprintf("You win with %s! The Ancient One had a lesser two pair.", playerHandName)
-			} else {
+			default:
 				message = fmt.Sprintf("You win with %s! The Ancient One had %s.", playerHandName, opponentHandName)
 			}
 		} else {
@@ -338,11 +339,12 @@ func CompareHandsForDisplay(playerHand, opponentHand []Card) HandComparisonResul
 	case ResultHand2Wins:
 		winner = "opponent"
 		if playerValue.Rank == opponentValue.Rank {
-			if playerValue.Rank == OnePair {
+			switch playerValue.Rank {
+			case OnePair:
 				message = fmt.Sprintf("The Ancient One wins with %s! You had a lesser pair.", opponentHandName)
-			} else if playerValue.Rank == TwoPair {
+			case TwoPair:
 				message = fmt.Sprintf("The Ancient One wins with %s! You had a lesser two pair.", opponentHandName)
-			} else {
+			default:
 				message = fmt.Sprintf("The Ancient One wins with %s! You had %s.", opponentHandName, playerHandName)
 			}
 		} else {

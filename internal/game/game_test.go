@@ -21,7 +21,7 @@ func TestDealHand(t *testing.T) {
 
 func TestFullGameLoop(t *testing.T) {
 	// 1. Initialize Game
-	game := NewGame()
+	game := NewGame("")
 	if game.GamePhase != PhaseAnte {
 		t.Errorf("Expected PhaseAnte, got %s", game.GamePhase)
 	}
@@ -56,9 +56,10 @@ func TestFullGameLoop(t *testing.T) {
 	game.OpponentTurn()
 
 	// Either PhasePreDrawBetting (Opponent Bet) or PhaseDiscard (Opponent Checked)
-	if game.GamePhase == PhaseDiscard {
+	switch game.GamePhase {
+	case PhaseDiscard:
 		// Opponent Checked
-	} else if game.GamePhase == PhasePreDrawBetting {
+	case PhasePreDrawBetting:
 		// Opponent Bet
 		// Player needs to Call/Fold
 		if game.TurnIndex != 0 {
