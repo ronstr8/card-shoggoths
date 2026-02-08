@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "card-shoggoths.fullname" . }}
+  namespace: poker
+  labels:
+    {{- include "card-shoggoths.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "card-shoggoths.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "card-shoggoths.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: card-shoggoths
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: data
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "card-shoggoths.fullname" . }}-data
+        {{- else }}
+        emptyDir: {}
+        {{- end }}

@@ -198,6 +198,8 @@ function updateButtons() {
     // ESP is only available between rounds or when game over
     const canESP = (phase === "complete" || phase === "ante" || phase === "game_over");
     const espBtn = document.getElementById('esp-btn');
+    const betUpBtn = document.getElementById('bet-up');
+    const betDownBtn = document.getElementById('bet-down');
 
     if (dealBtn) dealBtn.disabled = !isComplete && phase !== "ante" && phase !== "deal";
     if (betBtn) betBtn.disabled = !isBetting;
@@ -205,6 +207,8 @@ function updateButtons() {
     if (discardBtn) discardBtn.disabled = !isDiscard || (playerState && playerState.discarded);
     if (showdownBtn) showdownBtn.disabled = !(phase === "showdown");
     if (espBtn) espBtn.disabled = !canESP;
+    if (betUpBtn) betUpBtn.disabled = !isBetting;
+    if (betDownBtn) betDownBtn.disabled = !isBetting;
 
     // Input Handling
     if (isBetting && playerState) {
@@ -231,6 +235,17 @@ function updateButtons() {
         betInput.max = 100;
         betBtn.textContent = "Bet";
     }
+}
+
+function adjustBet(delta) {
+    const betInput = document.getElementById('bet-amount');
+    const currentValue = parseInt(betInput.value) || 0;
+    const newValue = currentValue + delta;
+    const min = parseInt(betInput.min) || 0;
+    const max = parseInt(betInput.max) || 100;
+
+    // Clamp to min/max
+    betInput.value = Math.max(min, Math.min(max, newValue));
 }
 
 async function deal() {

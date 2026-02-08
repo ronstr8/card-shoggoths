@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Shoggoths</title>
 
-    <script defer src="js/app.js?v=5"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <script defer src="js/app.js?v=7"></script>
+    <link rel="stylesheet" href="css/style.css?v=3">
 
     <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
@@ -62,7 +62,9 @@
                 <button id="deal-btn" onclick="deal()">Deal</button>
                 <div id="betting-controls">
                     <button id="fold-btn" onclick="fold()" disabled>Fold</button>
+                    <button id="bet-down" onclick="adjustBet(-1)" class="bet-adjust" disabled>😌</button>
                     <input type="number" id="bet-amount" value="10" min="1" max="100" disabled>
+                    <button id="bet-up" onclick="adjustBet(1)" class="bet-adjust" disabled>😬</button>
                     <button id="bet-btn" onclick="placeBet()" disabled>Bet</button>
                 </div>
                 <button id="discard-btn" onclick="submitDiscard()" disabled>Discard</button>

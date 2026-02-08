@@ -3,6 +3,8 @@ package main
 import (
 	"card-shoggoths/internal/server"
 	"card-shoggoths/internal/store"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +13,13 @@ import (
 )
 
 func main() {
+	versionFlag := flag.Bool("version", false, "Print version and exit")
+	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("card-shoggoths version %s\n", Version)
+		os.Exit(0)
+	}
 	// Init Store
 	os.MkdirAll("./data", 0755)
 	st, err := store.NewSQLiteStore("./data/game.db")

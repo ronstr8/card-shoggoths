@@ -1,0 +1,15 @@
+apiVersion: v2
+name: card-shoggoths
+description: A Lovecraftian poker game where you wager your sanity against an Ancient One
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - poker
+  - game
+  - lovecraft
+
+maintainers:
+  - name: Ron "Quinn" Straight
+    email: "straightre@gmail.com"
+    url: https://fazigu.org/

@@ -1,0 +1,18 @@
+{{- if and .Values.ingress.enabled .Values.ingress.tls }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "card-shoggoths.fullname" . }}-tls
+  namespace: poker
+  labels:
+    {{- include "card-shoggoths.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.ingress.tls.secretName | default "poker-tls" }}
+  issuerRef:
+    name: {{ .Values.certManager.issuer.name }}
+    kind: {{ .Values.certManager.issuer.kind }}
+  dnsNames:
+    {{- range .Values.ingress.hosts }}
+    - {{ .host }}
+    {{- end }}
+{{- end }}

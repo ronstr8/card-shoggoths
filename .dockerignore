@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Data
+data/
+*.db
+
+# Documentation
+README.md
+*.md
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+card-shoggoths
+
+# Kubernetes
+helm/
+
+# Misc
+tmp/
+.DS_Store

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: poker
+  labels:
+    name: poker
+    app: card-shoggoths

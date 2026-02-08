@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "card-shoggoths.fullname" . }}
+  namespace: poker
+  labels:
+    {{- include "card-shoggoths.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "card-shoggoths.selectorLabels" . | nindent 4 }}
