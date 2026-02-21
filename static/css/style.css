@@ -802,3 +802,18 @@
                 max-height: 80px;
             }
         }
+
+        /* Version Stamp */
+        #version-stamp {
+            position: fixed;
+            top: 4px;
+            left: 8px;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #39ff14;
+            opacity: 0.6;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: none;
+        }
+

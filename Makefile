@@ -3,6 +3,10 @@
 # Extract version from Go source code
 VERSION := $(shell grep 'const Version' cmd/card-shoggoths-server/version.go | sed 's/.*"\(.*\)".*/\1/')
 
+# Build metadata
+BUILD_DATE := $(shell date -Is)
+LDFLAGS := -X main.BuildDate=$(BUILD_DATE)
+
 # Variables for Kubernetes deployment
 IMAGE_NAME = card-shoggoths
 IMAGE_TAG ?= $(VERSION)
@@ -21,7 +25,7 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z_-]*k8s:.*?##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 run: ## Run server locally
-	go run ./cmd/card-shoggoths-server
+	go run -ldflags "$(LDFLAGS)" ./cmd/card-shoggoths-server
 
 dev: ## Run with air for hot reload
 	air

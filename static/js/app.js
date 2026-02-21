@@ -395,7 +395,25 @@ async function showdown() {
 document.addEventListener('DOMContentLoaded', () => {
     loadState();
     connectChat();
+    loadVersion();
 });
+
+async function loadVersion() {
+    try {
+        const res = await fetch('/api/version');
+        const data = await res.json();
+        const stamp = document.getElementById('version-stamp');
+        if (stamp && data.version) {
+            let text = `v${data.version}`;
+            if (data.buildDate && data.buildDate !== 'dev') {
+                text += ` · ${data.buildDate}`;
+            }
+            stamp.textContent = text;
+        }
+    } catch (e) {
+        console.warn('Version fetch failed:', e);
+    }
+}
 window.addEventListener('click', () => {
     const audio = document.getElementById('ambient');
     if (audio) audio.play().catch(console.warn);

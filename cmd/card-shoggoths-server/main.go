@@ -3,6 +3,7 @@ package main
 import (
 	"card-shoggoths/internal/server"
 	"card-shoggoths/internal/store"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -45,6 +46,13 @@ func main() {
 	r.HandleFunc("/api/esp/exit", server.ESPExitHandler)
 	r.HandleFunc("/ws/chat", server.ChatHandler)
 	r.HandleFunc("/debug/clear-session", server.ClearSessionHandler)
+	r.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"version":   Version,
+			"buildDate": BuildDate,
+		})
+	})
 
 	log.Println("Serving on :8080...")
 	log.Fatal(http.ListenAndServe(":8080", r))

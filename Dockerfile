@@ -13,8 +13,10 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary
-RUN CGO_ENABLED=1 go build -o card-shoggoths ./cmd/card-shoggoths-server
+# Build the binary with build date injected
+RUN CGO_ENABLED=1 go build \
+    -ldflags "-X main.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o card-shoggoths ./cmd/card-shoggoths-server
 
 # Runtime stage
 FROM alpine:latest
